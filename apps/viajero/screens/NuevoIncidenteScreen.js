@@ -1,0 +1,118 @@
+// Nuevo incidente: tipo + reserva opcional + título/descripción con contador.
+// Confirma con Alert antes de enviar (acción no reversible) y muestra n° de reporte al éxito.
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { theme } from '../../shared/theme';
+import { api } from '../../shared/api';
+import { AppButton, ErrorBanner } from '../../shared/components';
+import { TIPO_INCIDENTE } from '../../shared/format';
+
+const TIPOS = Object.keys(TIPO_INCIDENTE);
+
+export function NuevoIncidenteScreen({ onCreated }) {
+  const [reservas, setReservas] = useState([]);
+  const [tipo, setTipo] = useState('Vuelo_cancelado');
+  const [reservaId, setReservaId] = useState(null);
+  const [titulo, setTitulo] = useState('');
+  const [descripcion, setDescripcion] = useState('');
+  const [error, setError] = useState('');
+  const [ok, setOk] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api.get('/itinerario').then((r) => setReservas(r.data)).catch(() => {});
+  }, []);
+
+  function validar() {
+    if (titulo.trim().length < 5) return 'El título debe tener al menos 5 caracteres.';
+    if (descripcion.trim().length < 10) return 'Describe el problema con al menos 10 caracteres.';
+    return '';
+  }
+
+  function submit() {
+    const v = validar();
+    if (v) { setError(v); return; }
+    Alert.alert(
+      'Enviar reporte',
+      'Una vez enviado no podrás editarlo. ¿Confirmas el envío?',
+      [
+        { text: 'Revisar', style: 'cancel' },
+        { text: 'Enviar', onPress: enviar },
+      ]
+    );
+  }
+
+  async function enviar() {
+    setError('');
+    setLoading(true);
+    try {
+      const r = await api.post('/incidentes', {
+        tipo,
+        titulo: titulo.trim(),
+        descripcion: descripcion.trim(),
+        ...(reservaId ? { reserva_id: reservaId } : {}),
+      });
+      setOk(r.data.id);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (ok !== null) {
+    return (
+      <View style={styles.root}>
+        <Text style={styles.title}>✅ Reporte #{ok} creado</Text>
+        <Text style={styles.sub}>El equipo de soporte te responderá aquí mismo. Puedes seguirlo en Mis incidentes.</Text>
+        <AppButton title="Ver mis incidentes" onPress={() => onCreated(ok)} />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+      <Text style={styles.title}>Reportar problema</Text>
+      <ErrorBanner message={error} />
+      <Text style={styles.label}>Tipo de problema</Text>
+      <View style={styles.opts}>
+        {TIPOS.map((t) => (
+          <Pressable key={t} onPress={() => setTipo(t)} style={[styles.opt, tipo === t && styles.optActive]} accessibilityRole="button">
+            <Text style={[styles.optText, tipo === t && styles.optTextActive]}>{TIPO_INCIDENTE[t]}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={styles.label}>Reserva relacionada (opcional)</Text>
+      <View style={styles.opts}>
+        <Pressable onPress={() => setReservaId(null)} style={[styles.opt, reservaId === null && styles.optActive]} accessibilityRole="button">
+          <Text style={[styles.optText, reservaId === null && styles.optTextActive]}>Sin reserva</Text>
+        </Pressable>
+        {reservas.map((r) => (
+          <Pressable key={r.id} onPress={() => setReservaId(r.id)} style={[styles.opt, reservaId === r.id && styles.optActive]} accessibilityRole="button">
+            <Text style={[styles.optText, reservaId === r.id && styles.optTextActive]}>{r.codigo}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={styles.label}>Título ({titulo.trim().length}/120)</Text>
+      <TextInput style={styles.input} value={titulo} onChangeText={(t) => setTitulo(t.slice(0, 120))} placeholder="Ej. Vuelo cancelado y estoy varada" placeholderTextColor={theme.colors.muted} />
+      <Text style={styles.label}>Descripción ({descripcion.trim().length}/2000, mín. 10)</Text>
+      <TextInput style={[styles.input, styles.area]} value={descripcion} onChangeText={(t) => setDescripcion(t.slice(0, 2000))} placeholder="Contanos qué pasó, n° de vuelo o reserva…" placeholderTextColor={theme.colors.muted} multiline numberOfLines={4} textAlignVertical="top" />
+      <AppButton title="Enviar reporte" onPress={submit} loading={loading} />
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.background },
+  content: { padding: theme.spacing.lg, gap: theme.spacing.sm },
+  title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
+  sub: { fontSize: theme.type.body, color: theme.colors.text },
+  label: { fontSize: theme.type.caption, color: theme.colors.text, fontWeight: 'bold', marginTop: theme.spacing.sm },
+  opts: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm },
+  opt: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 999, paddingHorizontal: theme.spacing.md, minHeight: 44, justifyContent: 'center', backgroundColor: theme.colors.card },
+  optActive: { borderColor: theme.colors.primary, backgroundColor: '#EDE7FB' },
+  optText: { color: theme.colors.text },
+  optTextActive: { color: theme.colors.primary, fontWeight: 'bold' },
+  input: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.card, minHeight: theme.touch, paddingHorizontal: theme.spacing.md, fontSize: theme.type.body, color: theme.colors.text },
+  area: { minHeight: 110, paddingVertical: theme.spacing.sm },
+});
