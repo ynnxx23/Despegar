@@ -1,10 +1,10 @@
 -- Despegar Grupo 8 — schema v2 (PostgreSQL 15).
 -- Tablas mínimas con finalidad real (ver PLAN §6) + rutinas con finalidad real:
---   * touch_actualizado_at() + trigger: PG no tiene ON UPDATE; mantiene actualizado_at.
+--   * touch_actualizado_at() + trigger: mantiene actualizado_at automáticamente.
 --   * crear_respuesta(): respuesta + pase a EnGestion en UNA transacción (la usa AdminController).
 --   * resumen_cola(): conteos por estado/prioridad para el panel del agente (GET /api/admin/incidentes/resumen).
 --   * sembrar_demo() PROCEDURE: carga demo idempotente (la usa seeds.sql vía CALL).
--- Los ENUM de MySQL se reemplazan por VARCHAR + CHECK (portable y auto-documentado).
+-- Valores cerrados con VARCHAR + CHECK (auto-documentado).
 
 DROP TRIGGER IF EXISTS trg_incidentes_touch ON incidentes;
 DROP FUNCTION IF EXISTS resumen_cola();

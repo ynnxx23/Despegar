@@ -26,20 +26,55 @@ const expoAdapter = expoStore
     }
   : memoryAdapter;
 
+// Si SecureStore no está disponible o falla (web, nativo sin módulo),
+// se usa memoria como respaldo para no dejar la app colgada.
+function withMemoryFallback(adapter) {
+  return {
+    setItem: async (k, v) => {
+      try {
+        await adapter.setItem(k, v);
+      } catch (e) {
+        await memoryAdapter.setItem(k, v);
+      }
+    },
+    getItem: async (k) => {
+      try {
+        const v = await adapter.getItem(k);
+        return v !== null && v !== undefined ? v : await memoryAdapter.getItem(k);
+      } catch (e) {
+        return memoryAdapter.getItem(k);
+      }
+    },
+    deleteItem: async (k) => {
+      try {
+        await adapter.deleteItem(k);
+      } catch (e) {
+        /* noop: igual se limpia memoria */
+      }
+      await memoryAdapter.deleteItem(k);
+    },
+  };
+}
+
 export function createAuthStore(adapter = expoAdapter) {
+  const safe = adapter === memoryAdapter ? adapter : withMemoryFallback(adapter);
   return {
     saveSession: async (token, user) => {
-      await adapter.setItem('despegar.token', token);
-      await adapter.setItem('despegar.user', JSON.stringify(user));
+      await safe.setItem('despegar.token', token);
+      await safe.setItem('despegar.user', JSON.stringify(user));
     },
-    getToken: () => adapter.getItem('despegar.token'),
+    getToken: () => safe.getItem('despegar.token'),
     getUser: async () => {
-      const raw = await adapter.getItem('despegar.user');
-      return raw ? JSON.parse(raw) : null;
+      const raw = await safe.getItem('despegar.user');
+      try {
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        return null;
+      }
     },
     clearSession: async () => {
-      await adapter.deleteItem('despegar.token');
-      await adapter.deleteItem('despegar.user');
+      await safe.deleteItem('despegar.token');
+      await safe.deleteItem('despegar.user');
     },
   };
 }

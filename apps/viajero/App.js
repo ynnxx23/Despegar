@@ -26,7 +26,11 @@ export default function App() {
   const [miosKey, setMiosKey] = useState(0);
 
   async function logout() {
-    await authStore.clearSession();
+    try {
+      await authStore.clearSession();
+    } catch (e) {
+      /* storage roto o no disponible: igual se limpia el estado en memoria */
+    }
     clearAuthToken();
     setUser(null);
     setAuth('login');
@@ -37,18 +41,24 @@ export default function App() {
   useEffect(() => {
     setOnUnauthorized(() => logout());
     (async () => {
-      const [token, savedUser] = [await authStore.getToken(), await authStore.getUser()];
-      if (token && savedUser) {
-        setAuthToken(token);
-        try {
-          const r = await api.me();
-          setUser(r.user);
-          setAuth('app');
-        } catch (e) {
-          await logout();
+      try {
+        const token = await authStore.getToken();
+        const savedUser = await authStore.getUser();
+        if (token && savedUser) {
+          setAuthToken(token);
+          try {
+            const r = await api.me();
+            setUser(r.user);
+            setAuth('app');
+          } catch (e) {
+            await logout();
+          }
         }
+      } catch (e) {
+        await logout();
+      } finally {
+        setReady(true);
       }
-      setReady(true);
     })();
   }, []);
 

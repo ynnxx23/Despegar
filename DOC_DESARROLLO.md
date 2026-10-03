@@ -7,12 +7,12 @@
 
 | Capa | Tecnología | Versión | Notas |
 |---|---|---|---|
-| Apps móviles | React Native + Expo (JavaScript) | Expo SDK 51, RN 0.74, React 18.2 | Sin React Navigation ni Axios (decisión §12) |
-| Almacenamiento móvil | expo-secure-store | 13.x | Token fuera de AsyncStorage plano |
+| Apps móviles | React Native + Expo (JavaScript) | Expo SDK 57, RN 0.86, React 19.2 | Sin React Navigation ni Axios (decisión §12) |
+| Almacenamiento móvil | expo-secure-store | 57.x | Token fuera de AsyncStorage plano |
 | Backend | PHP POO + PDO | PHP 8.2 | Sin framework; front-controller propio |
 | Base de datos | PostgreSQL | 15 (imagen Docker: 16) | Rutinas en plpgsql/SQL |
 | Driver PHP-DB | pdo_pgsql | (extensión `php.ini`) | prepared nativo, sin emulación |
-| Entorno local | XAMPP (PHP+MariaDB) + servicio PostgreSQL x64 15 | — | MariaDB quedó en desuso tras la migración |
+| Entorno local | PHP 8.2 CLI + servicio PostgreSQL x64 15 | — | Solo PostgreSQL desde el inicio |
 | Utilidades | Node 24, Python 3.8, PowerShell 5.1, Git 2.51 | — | Scripts de test en `.ps1` |
 | Docker | Compose (opcional) | php:8.2-apache, postgres:16 | Solo `config` validado; `up` manual |
 
@@ -58,7 +58,7 @@ Responsabilidades: `Models` solo SQL preparado; `Controllers` validan y responde
 | Componentes RN | PascalCase + sufijo Screen | `ColaScreen.js`, `AppButton` |
 | Tablas/columnas SQL | snake_case plural/singular | `incidentes`, `user_id`, `creado_at` |
 | Rutinas SQL | snake_case verbal | `crear_respuesta()`, `resumen_cola()`, `sembrar_demo()` |
-| Checks SQL | `CHECK (col IN (...))` en vez de ENUM | rol, tipo, prioridad, estado |
+| Checks SQL | `CHECK (col IN (...))` con lista cerrada | rol, tipo, prioridad, estado |
 | Endpoints REST | sustantivos plural, sin verbos | `GET /api/admin/incidentes`, `POST /api/incidentes` |
 | JSON | `{data}` éxito / `{error:{code,message}}` fallo | uniforme vía `Response` |
 | Commits | Conventional Commits en español | `feat:`, `fix:`, `test:`, `docs:`, `style:` |
@@ -123,7 +123,7 @@ incidentes 1:N respuestas. Índices: `idx_reservas_user`, `idx_incidentes_user`,
 
 | Rutina | Tipo | Finalidad real |
 |---|---|---|
-| `touch_actualizado_at()` + trigger `trg_incidentes_touch` | trigger function | PG no tiene `ON UPDATE`; mantiene `actualizado_at` |
+| `touch_actualizado_at()` + trigger `trg_incidentes_touch` | trigger function | Mantiene `actualizado_at` automáticamente |
 | `crear_respuesta(INT,INT,TEXT)→INT` | function | Inserta respuesta + `EnGestion` en una transacción; la usa `AdminController` |
 | `resumen_cola()` | function STABLE | Conteos por estado/prioridad para el panel |
 | `sembrar_demo()` | PROCEDURE | Seed idempotente (agente+2 viajeros+reservas+incidente); `seeds.sql` = `CALL` |
@@ -140,7 +140,7 @@ Credenciales demo (solo desarrollo): `agente@despegar.com`/`Agente123`,
   Bearer y dispara `onUnauthorized`→logout ante 401 (expirado/inválido).
 - Autorización: `requireRole` por endpoint; viajero filtrado por `user_id=sub`; 401 genérico
   en login (no revela si el email existe); `reserva_id` validada como propia.
-- Entradas: whitelist de enums/longitudes, `PDO::prepare` en todo, `CHECK`s a nivel BD como
+- Entradas: whitelist de valores/longitudes, `PDO::prepare` en todo, `CHECK`s a nivel BD como
   defensa en profundidad, `limit≤50`, `Content-Type: application/json`, errores sin traces/SQL.
 
 ## 8. Apps móviles
