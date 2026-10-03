@@ -46,7 +46,7 @@ export function ItinerarioScreen() {
         <View key={r.id} style={styles.card}>
           <Text style={styles.cardTitle}>{TIPO_RESERVA[r.tipo] || r.tipo} · {r.codigo}</Text>
           <Text style={styles.body}>
-            {r.tipo === 'vuelo' ? `${r.origen || '?'} → ${r.destino || '?'}` : r.hotel || 'Hotel'}
+            {r.tipo === 'vuelo' ? `${r.origen || '?'} - ${r.destino || '?'}` : r.hotel || 'Hotel'}
           </Text>
           <Text style={styles.muted}>{fmtFecha(r.fecha_inicio)}{r.fecha_fin ? ` — ${fmtFecha(r.fecha_fin)}` : ''} · {r.estado}</Text>
         </View>

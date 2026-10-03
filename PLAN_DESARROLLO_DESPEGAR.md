@@ -316,3 +316,11 @@ Toda F2-F6 la revisa un modelo distinto al autor (ver matriz). Checklist §"Crit
 ¿Cumple borrador? ¿Funciona demo? ¿Arquitectura coherente? ¿Mantenible? ¿Intuitiva+HCI? ¿bcrypt+JWT+roles+PDO? ¿Validaciones? ¿Sin duplicación ni deps de más? ¿Sin secretos expuestos? Si algo falla → fix antes de avanzar.
 
 *Fin del plan. Próximo paso tras aprobación: F1 (schema + esqueleto + theme). Sin aprobación, no crear código.*
+
+---
+
+## ENMIENDA 1 — Migración MySQL → PostgreSQL 15 (pedido posterior, implementada y verificada)
+- Sustituye "MySQL 8" en §§ 5, 6, 13 (F1), 18.3: `db/schema.sql` v2 en dialecto PG (IDENTITY, VARCHAR+CHECK en vez de ENUM, TIMESTAMPTZ).
+- Rutinas con finalidad real: `touch_actualizado_at()` + trigger (reemplaza ON UPDATE), `crear_respuesta()` atómica (la usa `AdminController::responder`), `resumen_cola()` (nuevo endpoint aditivo `GET /api/admin/incidentes/resumen`, documentado en README), `PROCEDURE sembrar_demo()` (seeds idempotente vía CALL).
+- `Database.php` DSN `pgsql:`; normalización de enteros (PG devuelve strings) para contrato JSON estable; `docker-compose.yml` → `postgres:16`; `backend/.env.example` puerto 5432.
+- Suites F2/F3 re-verificadas sin regresiones (10/10 y 20/20) + F7 (expirado→401, loop completo).

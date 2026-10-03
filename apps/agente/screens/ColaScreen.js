@@ -71,7 +71,7 @@ export function ColaScreen({ onOpen, refreshKey }) {
       </View>
       <View style={styles.row}>
         <Pressable onPress={() => setOrden(orden === 'asc' ? 'desc' : 'asc')} accessibilityRole="button">
-          <Text style={styles.link}>Orden fecha: {orden === 'asc' ? 'más antiguos primero ↑' : 'más nuevos primero ↓'} (tocar para cambiar)</Text>
+          <Text style={styles.link}>Orden fecha: {orden === 'asc' ? 'más antiguos primero' : 'más nuevos primero'} (tocar para cambiar)</Text>
         </Pressable>
       </View>
       <ErrorBanner message={error} />
@@ -97,11 +97,11 @@ export function ColaScreen({ onOpen, refreshKey }) {
       {data !== null && data.length > 0 && (
         <View style={styles.rowBetween}>
           <Pressable onPress={() => setPage(Math.max(1, page - 1))} disabled={page <= 1} accessibilityRole="button">
-            <Text style={[styles.link, page <= 1 && styles.dim]}>← Anterior</Text>
+            <Text style={[styles.link, page <= 1 && styles.dim]}>Anterior</Text>
           </Pressable>
           <Text style={styles.muted}>Página {page}</Text>
           <Pressable onPress={() => setPage(page + 1)} disabled={data.length < 20} accessibilityRole="button">
-            <Text style={[styles.link, data.length < 20 && styles.dim]}>Siguiente →</Text>
+            <Text style={[styles.link, data.length < 20 && styles.dim]}>Siguiente</Text>
           </Pressable>
         </View>
       )}

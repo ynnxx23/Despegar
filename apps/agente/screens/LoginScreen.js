@@ -33,7 +33,7 @@ export function LoginScreen({ onSuccess }) {
       <Text style={styles.sub}>Acceso interno de agentes. Sin registro público.</Text>
       <ErrorBanner message={error} />
       <AppInput label="Email corporativo" value={email} onChangeText={setEmail} placeholder="agente@despegar.com" keyboard="email-address" autoCap="none" />
-      <AppInput label="Contraseña" value={password} onChangeText={setPassword} placeholder="••••••••" secure autoCap="none" />
+      <AppInput label="Contraseña" value={password} onChangeText={setPassword} placeholder="Tu contraseña" secure autoCap="none" />
       <AppButton title="Ingresar" onPress={submit} loading={loading} />
     </View>
   );

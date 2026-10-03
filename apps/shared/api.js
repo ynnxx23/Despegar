@@ -1,6 +1,9 @@
 // Cliente HTTP compartido F4: adjunta Bearer automáticamente y
 // notifica 401 (token inválido/expirado) para forzar logout (HCI: visibilidad de estado).
 // Sin Axios: fetch alcanza y evita una dependencia (decisión plan §3).
+// URL de la API: en Expo Go desde el CELULAR usa la IP LAN de tu PC
+// (ipconfig -> IPv4, ej. 'http://192.168.1.10:8000/api'). En emulador
+// Android usa 'http://10.0.2.2:8000/api'. Solo localhost si corres web.
 const BASE_URL = 'http://localhost:8000/api';
 
 let memoryToken = null;

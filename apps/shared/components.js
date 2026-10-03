@@ -54,7 +54,7 @@ export function ErrorBanner({ message }) {
   if (!message) return null;
   return (
     <View style={styles.error} accessibilityRole="alert">
-      <Text style={styles.errorText}>⚠ {message}</Text>
+      <Text style={styles.errorText}>{message}</Text>
     </View>
   );
 }
@@ -63,7 +63,7 @@ export function ErrorBanner({ message }) {
 export function Badge({ text, color }) {
   return (
     <View style={[styles.badge, { borderColor: color }]}>
-      <Text style={[styles.badgeText, { color }]}>● {text}</Text>
+      <Text style={[styles.badgeText, { color }]}>{text}</Text>
     </View>
   );
 }
