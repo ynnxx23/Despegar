@@ -80,7 +80,7 @@ export function DetalleIncidenteScreen({ id, onBack }) {
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
-      <AppButton title="← Volver" onPress={onBack} variant="ghost" />
+      <AppButton title="Volver" onPress={onBack} variant="ghost" />
       <ErrorBanner message={error} />
       {!inc && error === '' && <ActivityIndicator color={theme.colors.primary} />}
       {inc && (

@@ -63,7 +63,7 @@ export function NuevoIncidenteScreen({ onCreated }) {
   if (ok !== null) {
     return (
       <View style={styles.root}>
-        <Text style={styles.title}>✅ Reporte #{ok} creado</Text>
+        <Text style={styles.title}>Reporte #{ok} creado</Text>
         <Text style={styles.sub}>El equipo de soporte te responderá aquí mismo. Puedes seguirlo en Mis incidentes.</Text>
         <AppButton title="Ver mis incidentes" onPress={() => onCreated(ok)} />
       </View>

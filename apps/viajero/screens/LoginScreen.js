@@ -32,7 +32,7 @@ export function LoginScreen({ onSuccess, goRegister }) {
       <Text style={styles.sub}>Inicia sesión para ver tu itinerario y reportar incidentes.</Text>
       <ErrorBanner message={error} />
       <AppInput label="Email" value={email} onChangeText={setEmail} placeholder="ana@test.com" keyboard="email-address" autoCap="none" />
-      <AppInput label="Contraseña" value={password} onChangeText={setPassword} placeholder="••••••••" secure autoCap="none" />
+      <AppInput label="Contraseña" value={password} onChangeText={setPassword} placeholder="Tu contraseña" secure autoCap="none" />
       <AppButton title="Ingresar" onPress={submit} loading={loading} />
       <AppButton title="Crear cuenta" onPress={goRegister} variant="ghost" />
     </View>

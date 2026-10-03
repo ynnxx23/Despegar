@@ -12,9 +12,9 @@ import { NuevoIncidenteScreen } from './screens/NuevoIncidenteScreen';
 import { MisIncidentesScreen, DetalleIncidenteScreen } from './screens/MisIncidentesScreen';
 
 const TABS = [
-  { key: 'itinerario', label: '🧳 Viajes' },
-  { key: 'nuevo', label: '⚠ Reportar' },
-  { key: 'mios', label: '📋 Incidentes' },
+  { key: 'itinerario', label: 'Viajes' },
+  { key: 'nuevo', label: 'Reportar' },
+  { key: 'mios', label: 'Incidentes' },
 ];
 
 export default function App() {

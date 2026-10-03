@@ -35,7 +35,7 @@ export function RegisterScreen({ onSuccess, goLogin }) {
       <ErrorBanner message={error} />
       <AppInput label="Nombre" value={nombre} onChangeText={setNombre} placeholder="Ana Viajera" />
       <AppInput label="Email" value={email} onChangeText={setEmail} placeholder="ana@test.com" keyboard="email-address" autoCap="none" />
-      <AppInput label="Contraseña (mín. 8)" value={password} onChangeText={setPassword} placeholder="••••••••" secure autoCap="none" />
+      <AppInput label="Contraseña (mín. 8)" value={password} onChangeText={setPassword} placeholder="Tu contraseña" secure autoCap="none" />
       <AppButton title="Registrarme" onPress={submit} loading={loading} />
       <AppButton title="Ya tengo cuenta" onPress={goLogin} variant="ghost" />
     </View>
