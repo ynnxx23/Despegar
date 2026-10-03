@@ -1,5 +1,5 @@
 # Despegar — Grupo 8 (Gestión de Incidentes Críticos)
-Ver `PLAN_DESARROLLO_DESPEGAR.md` (fuente de planificación, F0). Enmienda: BD migrada de MySQL a **PostgreSQL 15** (schema v2 con trigger, funciones y procedimiento).
+Ver `PLAN_DESARROLLO_DESPEGAR.md` (fuente de planificación, F0). BD **PostgreSQL 15** (schema v2 con trigger, funciones y procedimiento).
 Documentación: `DOC_PROYECTO.md` (general) y `DOC_DESARROLLO.md` (especificaciones técnicas).
 
 ## Estructura

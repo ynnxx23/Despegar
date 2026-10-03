@@ -11,7 +11,7 @@
 
 - **App 1 — Portal de Ayuda al Viajero (rol `viajero`):** login, ver itinerario vuelos/hoteles, crear reporte de incidente (POST), leer respuestas de soporte (GET).
 - **App 2 — Centro de Resolución de Conflictos (rol `agente`):** login empleado, ver cola de incidentes ordenada por fecha (GET), cambiar prioridad (Baja/Alta/Crítica) y estado a Resuelto + responder (PUT/POST).
-- **Backend PHP + MySQL:** REST JSON, hash bcrypt, JWT HS256, control de roles (token viajero NO accede a endpoints admin).
+- **Backend PHP + PostgreSQL:** REST JSON, hash bcrypt, JWT HS256, control de roles (token viajero NO accede a endpoints admin).
 
 **Lo que NO incluye (para evitar scope-creep):** no hay compra/reserva de viajes, ni pagos, ni chat en tiempo real (sockets), ni IA, ni programa Pasaporte, ni panel B2B de agencias. Esos temas aparecen en `Investigacion_Despegar.docx` como contexto de negocio, no como requisito del borrador.
 
@@ -68,9 +68,9 @@ Convención: `[BORR-G8]` = borrador Grupo 8, `[TRANS]` = requisitos transversale
 
 1. **Token: "JWT o token aleatorio temporal" [TRANS-69] vs prompt exige JWT HS256.** Decisión: JWT HS256 obligatorio (cumple ambas: es token y es JWT). No implementar tokens opacos.
 2. **Registro de agentes no especificado.** Borrador solo dice "inicia sesión". Propuesta: seed de 1 agente en BD + `POST /api/register` solo crea `viajero`; crear agente solo vía seed o endpoint admin. Evita escalada de privilegios.
-3. **Estados de incidente:** solo se menciona "Resuelto". Propuesta: `Abierto → EnGestion → Resuelto` (mínimo necesario para cola útil). Prioridad enum `Baja,Alta,Critica` (sin tilde en BD/API por compatibilidad; mostrar "Crítica" en UI).
+3. **Estados de incidente:** solo se menciona "Resuelto". Propuesta: `Abierto → EnGestion → Resuelto` (mínimo necesario para cola útil). Prioridad `Baja,Alta,Critica` (`VARCHAR+CHECK`, sin tilde en BD/API por compatibilidad; mostrar "Crítica" en UI).
 4. **"Ordenados por fecha" sin dirección.** Decisión: `created_at ASC` por defecto (más antiguos primero = FIFO urgencias), con param `?orden=asc|desc` y filtros `?estado=&prioridad=`.
-5. **Tipos de incidente:** ejemplos sueltos. Decisión: `tipo ENUM('Vuelo_cancelado','Hotel_sin_reserva','Fraude','Otro')` + `titulo, descripcion`. Suficiente sin sobrediseñar.
+5. **Tipos de incidente:** ejemplos sueltos. Decisión: `tipo VARCHAR+CHECK('Vuelo_cancelado','Hotel_sin_reserva','Fraude','Otro')` + `titulo, descripcion`. Suficiente sin sobrediseñar.
 6. **Itinerario:** ¿de dónde sale? No hay endpoint de compras. Decisión: tabla `reservas` precargada (seed por usuario) solo lectura para viajero; no implementar CRUD de reservas en esta versión. Documentar como límite.
 7. **Expiración JWT, renovación, longitud password:** transversales no fijan valores. Decisión: JWT exp 8h, sin refresh en v1 (re-login); password mín 8 caracteres (toma referencia Grupo 2 Ualá, coherente y defendible); bcrypt cost 10.
 8. **¿PUT cambia prioridad y estado juntos o separados?** Decisión: un solo `PUT /api/admin/incidentes/:id` con body parcial `{prioridad?, estado?, asignado?}`.
@@ -109,7 +109,7 @@ despegar/
   db/{schema.sql,seeds.sql}
 ```
 
-- **Comunicación:** `Fetch/Axios → HTTPS → PHP REST JSON → PDO → MySQL`. Stateless: cada request lleva `Authorization: Bearer JWT`. CORS restringido en prod.
+- **Comunicación:** `Fetch/Axios → HTTPS → PHP REST JSON → PDO → PostgreSQL`. Stateless: cada request lleva `Authorization: Bearer JWT`. CORS restringido en prod.
 - **Auth:** `password_hash(PASSWORD_BCRYPT) / password_verify`; JWT `header.payload.signature` HS256 con `hash_hmac('sha256')`; claims `{sub, rol, exp, iat}`; nunca password/datos sensibles en payload. Validación en middleware; 401 token inválido/expirado, 403 rol insuficiente.
 - **Errores:** formato `{error:{code,message,details?}}`; nunca stack traces ni SQL a cliente; log en servidor.
 - **Config:** todo secreto por env. Sin secretos hardcodeados.
@@ -124,11 +124,12 @@ despegar/
 
 ## 6. Base de datos
 
-**Entidades:** `usuarios(id PK, nombre, email UNIQUE NOT NULL, password_hash NOT NULL, rol ENUM('viajero','agente') NOT NULL, creado_at)`. `reservas(id PK, user_id FK→usuarios, tipo ENUM('vuelo','hotel'), codigo VARCHAR(20) NOT NULL, origen/destino/hotel, fecha_inicio, fecha_fin, estado VARCHAR(20), creado_at)`. `incidentes(id PK, user_id FK, reserva_id FK NULL→reservas (SET NULL), tipo ENUM, titulo VARCHAR(120) NOT NULL, descripcion TEXT NOT NULL, prioridad ENUM('Baja','Alta','Critica') DEFAULT 'Baja', estado ENUM('Abierto','EnGestion','Resuelto') DEFAULT 'Abierto', creado_at, actualizado_at, INDEX(user_id, estado, prioridad, creado_at))`. `respuestas(id PK, incidente_id FK→incidentes CASCADE, autor_id FK→usuarios, mensaje TEXT NOT NULL, creado_at)`.
+**Entidades:** `usuarios(id PK, nombre, email UNIQUE NOT NULL, password_hash NOT NULL, rol VARCHAR+CHECK('viajero','agente') NOT NULL, creado_at)`. `reservas(id PK, user_id FK→usuarios, tipo VARCHAR+CHECK('vuelo','hotel'), codigo VARCHAR(20) NOT NULL, origen/destino/hotel, fecha_inicio, fecha_fin, estado VARCHAR(20), creado_at)`. `incidentes(id PK, user_id FK, reserva_id FK NULL→reservas (SET NULL), tipo VARCHAR+CHECK, titulo VARCHAR(120) NOT NULL, descripcion TEXT NOT NULL, prioridad VARCHAR+CHECK('Baja','Alta','Critica') DEFAULT 'Baja', estado VARCHAR+CHECK('Abierto','EnGestion','Resuelto') DEFAULT 'Abierto', creado_at, actualizado_at, INDEX(user_id, estado, prioridad, creado_at))`. `respuestas(id PK, incidente_id FK→incidentes CASCADE, autor_id FK→usuarios, mensaje TEXT NOT NULL, creado_at)`.
 
 **Relaciones:** usuarios 1:N reservas; usuarios 1:N incidentes; reservas 1:N incidentes (opcional N:1); incidentes 1:N respuestas. Sin N:M (no se crea tabla puente innecesaria).
 **Integridad:** FK con `ON DELETE CASCADE` (respuestas) / `SET NULL` (reserva opcional); NOT NULL en obligatorios; UNIQUE email; CHECK longitud password se valida en app (hash siempre 60 chars); normalización 3FN (sin campos multivalor; dirección hotel atomizada mínima).
 **Índices:** `incidentes(estado, prioridad, creado_at)` para cola; `incidentes(user_id)` para "míos".
+**PostgreSQL 15 desde el inicio:** `db/schema.sql` en dialecto PG (IDENTITY, VARCHAR+CHECK, TIMESTAMPTZ). Rutinas: `touch_actualizado_at()` + trigger (actualizado_at automático), `crear_respuesta()` atómica (la usa `AdminController::responder`), `resumen_cola()` (`GET /api/admin/incidentes/resumen`), `PROCEDURE sembrar_demo()` (seeds idempotente vía CALL). `Database.php` DSN `pgsql:`; `docker-compose.yml` → `postgres:16`; `.env` puerto 5432.
 
 ---
 
@@ -147,10 +148,10 @@ Base `/api`. Auth: `Authorization: Bearer <jwt>` salvo register/login.
 | GET | `/api/incidentes/:id` | dueño o agente | — | 200 incidente+reserva | 401/403/404 |
 | GET | `/api/incidentes/:id/respuestas` | dueño o agente | — | 200 `[{respuesta}]` | 401/403/404 |
 | GET | `/api/admin/incidentes` | agente | `?estado=&prioridad=&orden=asc\|desc&page=&limit=` | 200 `{data[], total}` orden fecha ASC defecto | 401/403 |
-| PUT | `/api/admin/incidentes/:id` | agente | `{prioridad?, estado?}` | 200 incidente actualizado | 400 enum inválido, 401/403/404 |
+| PUT | `/api/admin/incidentes/:id` | agente | `{prioridad?, estado?}` | 200 incidente actualizado | 400 valor inválido, 401/403/404 |
 | POST | `/api/admin/incidentes/:id/respuestas` | agente | `{mensaje}` | 201 respuesta | 400/401/403/404 |
 
-Validaciones: email formato, password ≥8, título 5-120, descripción 10-2000, enums estrictos, `reserva_id` debe pertenecer al viajero. Códigos: 200/201/400/401/403/404/409/422/500.
+Validaciones: email formato, password ≥8, título 5-120, descripción 10-2000, valores estrictos, `reserva_id` debe pertenecer al viajero. Códigos: 200/201/400/401/403/404/409/422/500.
 
 ---
 
@@ -237,7 +238,7 @@ Dependencias duras: BD → Backend → Integración → Testing. Independientes:
 - **F5 App1:** Spark+Bunny. Archivos: `apps/viajero/*`. Done: itinerario, crear y leer incidentes/respuestas con estados carga/vacío/error.
 - **F6 App2:** Spark+Bunny. Done: cola ordenada, filtros, PUT prioridad/estado, responder.
 - **F7 Integración:** Lightning. Done: reporte App1 aparece en App2; respuesta App2 visible en App1; JWT expirado → logout.
-- **F8 Validaciones+Docker opcional:** LogCat. Archivos: `docker-compose.yml` (php+mysql+volumen), validaciones. Done: `docker compose up` levanta stack; sin Docker también corre con XAMPP.
+- **F8 Validaciones+Docker opcional:** LogCat. Archivos: `docker-compose.yml` (php+postgres+volumen), validaciones. Done: `docker compose up` levanta stack; sin Docker también corre con PHP CLI.
 - **F9 Testing:** Lightning+LogCat. Done: checklist manual + script `test-api.ps1` (register/login/403/SQLi/exp).
 - **F10 Seguridad:** Ultra+LogCat. Done: sin passwords en logs/JWT, PDO everywhere, CORS, env.
 - **F11 Pulido/Entrega:** Spark. Done: README, capturas, demo.
@@ -258,7 +259,7 @@ feat(app1): login/registro/itinerario
 feat(app1): crear incidente + ver respuestas
 feat(app2): login + cola + detalle gestion
 fix: bloquear viajero en /admin (403) + validar reserva propia
-feat(docker): compose php+mysql opcional con volumen
+feat(docker): compose php+postgres opcional con volumen
 test: script api + checklist roles/seguridad
 fix: validaciones + manejo 401/expirado en apps
 refactor: sanitizar errores + CORS + env
@@ -272,7 +273,7 @@ Nunca un commit gigante; cada feat verificable.
 ## 15. Estrategia de testing
 
 - Manual por rol: viajero A crea incidente → agente lo ve primero si más antiguo → cambia a Crítica/EnGestion → responde → viajero lee → agente cierra → viajero ve Resuelto.
-- Negativos: login mal (401), viajero GET /admin (403), POST sin token (401), SQLi `' OR '1'='1` en login/email (debe fallar seguro), JWT manipulado/expirado (401), reserva ajena (403/404), enums inválidos (400).
+- Negativos: login mal (401), viajero GET /admin (403), POST sin token (401), SQLi `' OR '1'='1` en login/email (debe fallar seguro), JWT manipulado/expirado (401), reserva ajena (403/404), valores inválidos (400).
 - Stack: `test-api.ps1` con Invoke-RestMethod + checklist Expo Go en Android/iOS. Sin librerías de test en v1 (mantener simple); PHPUnit solo si sobra tiempo (justificar).
 
 ## 16. Revisión cruzada
@@ -288,14 +289,14 @@ Toda F2-F6 la revisa un modelo distinto al autor (ver matriz). Checklist §"Crit
 - JWT secreto débil/fuga → env + longitud + revisión.
 - Guardar token inseguro → SecureStore obligatorio.
 - N+1 / cola sin paginar → paginación + índices.
-- Docker que complique (Expo no necesita Docker) → Docker solo para PHP+MySQL, opcional.
+- Docker que complique (Expo no necesita Docker) → Docker solo para PHP+PostgreSQL, opcional.
 - Alcance (reservas editables, chat realtime) → explícitamente fuera v1.
 
 ## 18. Decisiones arquitectónicas
 
 1. PHP puro POO+PDO sin Laravel/Symfony: respeta "sin frameworks innecesarios", cubre lo evaluado en [PREG] (clases, encapsulamiento, PDO) y es desplegable en cualquier hosting. Costo: router manual mínimo.
 2. JWT HS256 implementado con `hash_hmac` (sin `firebase/php-jwt`) en v1: evita dependencia externa (prompt §3 exige justificar). Si auditoría exige, migrar a librería con Composer + justificar.
-3. MySQL + volumen Docker para persistencia (responde [PREG-09]); sin ORM.
+3. PostgreSQL + volumen Docker para persistencia (responde [PREG-09]); sin ORM.
 4. Dos apps Expo separadas (no una con switch rol): refleja borrador (dos APK) y aísla permisos; comparten `shared/`.
 5. Sin refresh-token en v1: simplicidad; re-login a las 8h. Documentado para v2.
 
@@ -316,11 +317,3 @@ Toda F2-F6 la revisa un modelo distinto al autor (ver matriz). Checklist §"Crit
 ¿Cumple borrador? ¿Funciona demo? ¿Arquitectura coherente? ¿Mantenible? ¿Intuitiva+HCI? ¿bcrypt+JWT+roles+PDO? ¿Validaciones? ¿Sin duplicación ni deps de más? ¿Sin secretos expuestos? Si algo falla → fix antes de avanzar.
 
 *Fin del plan. Próximo paso tras aprobación: F1 (schema + esqueleto + theme). Sin aprobación, no crear código.*
-
----
-
-## ENMIENDA 1 — Migración MySQL → PostgreSQL 15 (pedido posterior, implementada y verificada)
-- Sustituye "MySQL 8" en §§ 5, 6, 13 (F1), 18.3: `db/schema.sql` v2 en dialecto PG (IDENTITY, VARCHAR+CHECK en vez de ENUM, TIMESTAMPTZ).
-- Rutinas con finalidad real: `touch_actualizado_at()` + trigger (reemplaza ON UPDATE), `crear_respuesta()` atómica (la usa `AdminController::responder`), `resumen_cola()` (nuevo endpoint aditivo `GET /api/admin/incidentes/resumen`, documentado en README), `PROCEDURE sembrar_demo()` (seeds idempotente vía CALL).
-- `Database.php` DSN `pgsql:`; normalización de enteros (PG devuelve strings) para contrato JSON estable; `docker-compose.yml` → `postgres:16`; `backend/.env.example` puerto 5432.
-- Suites F2/F3 re-verificadas sin regresiones (10/10 y 20/20) + F7 (expirado→401, loop completo).

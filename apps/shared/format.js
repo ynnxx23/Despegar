@@ -1,4 +1,4 @@
-// Etiquetas legibles para tipos de reserva e incidente (evita mostrar enums crudos).
+// Etiquetas legibles para tipos de reserva e incidente (evita mostrar valores crudos).
 export const TIPO_RESERVA = { vuelo: 'Vuelo', hotel: 'Hotel' };
 export const TIPO_INCIDENTE = {
   Vuelo_cancelado: 'Vuelo cancelado',
