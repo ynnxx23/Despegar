@@ -14,6 +14,21 @@ call npm.cmd install || (echo [ERROR] npm install fallo & pause & exit /b 1)
 
 echo.
 echo [2/2] Iniciando Expo (viajero, puerto 8081)...
-echo Usa la IP LAN de tu PC en apps\shared\api.js si pruebas en celular.
+if not exist ".env" (
+  echo [.env] No existe, detectando IP LAN de esta PC...
+  set "LANIP="
+  for /f "tokens=2 delims=:" %%i in ('ipconfig ^| findstr /R /C:"IPv4.*192\.168\." /C:"IPv4.*10\." /C:"IPv4.*172\.1[6-9]\." /C:"IPv4.*172\.2[0-9]\." /C:"IPv4.*172\.3[0-1]\."') do (
+    for /f "tokens=1" %%j in ("%%i") do (
+      if not defined LANIP set "LANIP=%%j"
+    )
+  )
+)
+if not exist ".env" if defined LANIP (
+  (echo EXPO_PUBLIC_API_URL=http://%LANIP%:8000/api)>".env"
+  echo [.env] Creado con EXPO_PUBLIC_API_URL=http://%LANIP%:8000/api
+)
+if not exist ".env" (
+  echo [AVISO] No se detecto IP LAN - crea apps\viajero\.env manual con EXPO_PUBLIC_API_URL=http://TU-IP:8000/api
+)
 if "%~1"=="" (set EXPO_ARGS=--port 8081) else (set EXPO_ARGS=%*)
 call npx.cmd expo start %EXPO_ARGS% || (echo [ERROR] expo start fallo & pause & exit /b 1)
