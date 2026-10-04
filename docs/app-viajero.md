@@ -13,7 +13,7 @@ de soporte hasta que el caso figura Resuelto. Cada viajero solo ve lo suyo
 
 - Expo SDK 57, React Native 0.86, React 19.2, JavaScript. Sin React Navigation ni Axios.
 - `expo-secure-store` 57.x: guarda el JWT (nunca en plano).
-- Paquete: `despegar-viajero` (`apps/viajero/package.json`), entry `App.js`.
+- Paquete: `despegar-viajero` (`apps/viajero/package.json`), entry `expo/AppEntry` → `App.js` (el shim registra el componente raíz; sin él sale `main has not been registered`).
 
 ```
 apps/viajero/
