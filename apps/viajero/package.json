@@ -2,7 +2,7 @@
   "name": "despegar-viajero",
   "version": "0.1.0",
   "private": true,
-  "main": "App.js",
+  "main": "expo/AppEntry",
   "scripts": {
     "start": "expo start"
   },
