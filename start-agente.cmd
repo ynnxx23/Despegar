@@ -14,15 +14,7 @@ call npm.cmd install || (echo [ERROR] npm install fallo & pause & exit /b 1)
 
 echo.
 echo [2/2] Iniciando Expo (agente, puerto 8082)...
-if not exist ".env" (
-  echo [.env] No existe, detectando IP LAN de esta PC...
-  set "LANIP="
-  for /f "tokens=2 delims=:" %%i in ('ipconfig ^| findstr /R /C:"IPv4.*192\.168\." /C:"IPv4.*10\." /C:"IPv4.*172\.1[6-9]\." /C:"IPv4.*172\.2[0-9]\." /C:"IPv4.*172\.3[0-1]\."') do (
-    for /f "tokens=1" %%j in ("%%i") do (
-      if not defined LANIP set "LANIP=%%j"
-    )
-  )
-)
+if not exist ".env" call :DETECT_IP
 if not exist ".env" if defined LANIP (
   (echo EXPO_PUBLIC_API_URL=http://%LANIP%:8000/api)>".env"
   echo [.env] Creado con EXPO_PUBLIC_API_URL=http://%LANIP%:8000/api
@@ -32,3 +24,18 @@ if not exist ".env" (
 )
 if "%~1"=="" (set EXPO_ARGS=--port 8082) else (set EXPO_ARGS=%*)
 call npx.cmd expo start %EXPO_ARGS% || (echo [ERROR] expo start fallo & pause & exit /b 1)
+exit /b 0
+
+:DETECT_IP
+echo [.env] No existe, detectando IP LAN de esta PC (prioriza 192.168, luego 10., luego 172.16-31)...
+set "LANIP="
+for /f "tokens=2 delims=:" %%i in ('ipconfig ^| findstr /R /C:"IPv4.*192\.168\."') do (
+  for /f "tokens=1" %%j in ("%%i") do if not defined LANIP set "LANIP=%%j"
+)
+if not defined LANIP for /f "tokens=2 delims=:" %%i in ('ipconfig ^| findstr /R /C:"IPv4.*10\."') do (
+  for /f "tokens=1" %%j in ("%%i") do if not defined LANIP set "LANIP=%%j"
+)
+if not defined LANIP for /f "tokens=2 delims=:" %%i in ('ipconfig ^| findstr /R /C:"IPv4.*172\.1[6-9]\." /C:"IPv4.*172\.2[0-9]\." /C:"IPv4.*172\.3[0-1]\."') do (
+  for /f "tokens=1" %%j in ("%%i") do if not defined LANIP set "LANIP=%%j"
+)
+exit /b 0
