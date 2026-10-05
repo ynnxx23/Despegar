@@ -3,10 +3,32 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
-import { EmptyState, ErrorBanner, Badge } from '../../shared/components';
+import { AppButton, EmptyState, ErrorBanner, Badge } from '../../shared/components';
 import { TIPO_RESERVA, fmtFecha } from '../../shared/format';
 
-export function ItinerarioScreen() {
+function inicioDia(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function textoCuenta(reserva) {
+  if (!reserva?.fecha_inicio) return '';
+  const hoy = inicioDia(new Date());
+  const ini = inicioDia(reserva.fecha_inicio);
+  const fin = reserva?.fecha_fin ? inicioDia(reserva.fecha_fin) : null;
+  if (fin && hoy >= ini && hoy <= fin) return 'en curso';
+  const dias = Math.round((ini - hoy) / 86400000);
+  if (dias > 0) return `en ${dias} días`;
+  if (dias === 0) return 'es hoy';
+  return `hace ${Math.abs(dias)} días`;
+}
+
+function rutaReserva(r) {
+  return r.tipo === 'vuelo' ? `${r.origen || '?'} → ${r.destino || '?'}` : r.hotel || 'Hotel';
+}
+
+export function ItinerarioScreen({ onReportar }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -29,6 +51,34 @@ export function ItinerarioScreen() {
     setRefreshing(false);
   }
 
+  const lista = data ?? [];
+  const vuelos = lista.filter((r) => r.tipo === 'vuelo').length;
+  const hoteles = lista.filter((r) => r.tipo === 'hotel').length;
+  const hoy = inicioDia(new Date());
+  const futuras = lista
+    .filter((r) => r?.fecha_inicio && inicioDia(r.fecha_inicio) >= hoy)
+    .sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
+  const proximo = futuras.length > 0 ? futuras[0] : null;
+  const proximos = lista
+    .filter((r) => r?.fecha_inicio && inicioDia(r.fecha_inicio) >= hoy)
+    .sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
+  const pasados = lista
+    .filter((r) => !r?.fecha_inicio || inicioDia(r.fecha_inicio) < hoy)
+    .sort((a, b) => new Date(b?.fecha_inicio || 0) - new Date(a?.fecha_inicio || 0));
+
+  function tarjeta(r, destacada) {
+    return (
+      <View key={r.id} style={destacada ? styles.destacada : styles.card}>
+        {destacada && <Text style={styles.sello}>PRÓXIMO VIAJE · {textoCuenta(r)}</Text>}
+        <Text style={destacada ? styles.codigoGrande : styles.cardTitle}>{TIPO_RESERVA[r.tipo] || r.tipo} · {r.codigo}</Text>
+        <Text style={styles.body}>{rutaReserva(r)}</Text>
+        <Text style={styles.muted}>{fmtFecha(r.fecha_inicio)}{r.fecha_fin ? ` — ${fmtFecha(r.fecha_fin)}` : ''}{!destacada ? ` · ${textoCuenta(r)}` : ''}</Text>
+        <Badge text={r.estado} color={theme.status[r.estado] || theme.colors.muted} />
+        <AppButton title="Reportar sobre esta reserva" onPress={() => onReportar?.(r.id)} variant="ghost" />
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       style={styles.root}
@@ -40,18 +90,22 @@ export function ItinerarioScreen() {
       {error !== '' && <Text style={styles.retry} onPress={load}>Toca para reintentar</Text>}
       {data === null && error === '' && <ActivityIndicator color={theme.colors.primary} />}
       {data !== null && data.length === 0 && (
-        <EmptyState title="Aún no tienes viajes" hint="Cuando compres un viaje aparecerá aquí tu itinerario." />
+        onReportar
+          ? <EmptyState title="Aún no tienes viajes" hint="Cuando compres un viaje aparecerá aquí tu itinerario." actionTitle="Reportar problema" onAction={() => onReportar?.(null)} />
+          : <EmptyState title="Aún no tienes viajes" hint="Cuando compres un viaje aparecerá aquí tu itinerario." />
       )}
-      {data !== null && data.map((r) => (
-        <View key={r.id} style={styles.card}>
-          <Text style={styles.cardTitle}>{TIPO_RESERVA[r.tipo] || r.tipo} · {r.codigo}</Text>
-          <Text style={styles.body}>
-            {r.tipo === 'vuelo' ? `${r.origen || '?'} - ${r.destino || '?'}` : r.hotel || 'Hotel'}
-          </Text>
-          <Text style={styles.muted}>{fmtFecha(r.fecha_inicio)}{r.fecha_fin ? ` — ${fmtFecha(r.fecha_fin)}` : ''}</Text>
-          <Badge text={r.estado} color={theme.status[r.estado] || theme.colors.muted} />
-        </View>
-      ))}
+      {data !== null && data.length > 0 && (
+        <Text style={styles.muted}>{vuelos} vuelos · {hoteles} hoteles</Text>
+      )}
+      {proximo && tarjeta(proximo, true)}
+      {data !== null && data.length > 0 && (
+        <Text style={styles.seccion}>Próximos ({proximos.length})</Text>
+      )}
+      {proximos.filter((r) => !proximo || r.id !== proximo.id).map((r) => tarjeta(r, false))}
+      {pasados.length > 0 && (
+        <Text style={styles.seccion}>Pasados ({pasados.length})</Text>
+      )}
+      {pasados.map((r) => tarjeta(r, false))}
     </ScrollView>
   );
 }
@@ -60,9 +114,13 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   content: { padding: theme.spacing.lg, gap: theme.spacing.md },
   title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
+  seccion: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text, marginTop: theme.spacing.sm },
   retry: { color: theme.colors.primary, fontWeight: 'bold' },
   card: { backgroundColor: theme.colors.card, borderRadius: theme.radius.lg, padding: theme.spacing.md, gap: 4 },
+  destacada: { backgroundColor: theme.colors.card, borderRadius: theme.radius.lg, padding: theme.spacing.md, gap: 6, borderWidth: 2, borderColor: theme.colors.primary },
+  sello: { fontSize: theme.type.caption, fontWeight: 'bold', color: theme.colors.primary },
   cardTitle: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text },
+  codigoGrande: { fontSize: 28, fontWeight: 'bold', color: theme.colors.text },
   body: { fontSize: theme.type.body, color: theme.colors.text },
   muted: { fontSize: theme.type.caption, color: theme.colors.muted },
 });

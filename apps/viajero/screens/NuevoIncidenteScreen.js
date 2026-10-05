@@ -9,16 +9,23 @@ import { TIPO_INCIDENTE, fmtFecha } from '../../shared/format';
 
 const TIPOS = Object.keys(TIPO_INCIDENTE);
 
+const AYUDA_TIPO = {
+  Vuelo_cancelado: 'Incluí código de reserva, número de vuelo, fecha y qué te ofreció la aerolínea.',
+  Hotel_sin_reserva: 'Incluí código de reserva, hotel, fecha de check-in y comprobante si tenés.',
+  Fraude: 'Incluí fecha del cargo, monto y cualquier comprobante que tengas a mano.',
+  Otro: 'Contanos fecha, lugar y todo dato que ayude a ubicar tu reserva.',
+};
+
 function detalleReserva(r) {
   const ruta = r.tipo === 'vuelo' ? `${r.origen || '?'} - ${r.destino || '?'}` : r.hotel || 'Hotel';
   return `${r.codigo} · ${fmtFecha(r.fecha_inicio)} · ${ruta}`;
 }
 
-export function NuevoIncidenteScreen({ onCreated }) {
+export function NuevoIncidenteScreen({ onCreated, reservaIdInicial }) {
   const [reservas, setReservas] = useState([]);
   const [reservasError, setReservasError] = useState('');
   const [tipo, setTipo] = useState('Vuelo_cancelado');
-  const [reservaId, setReservaId] = useState(null);
+  const [reservaId, setReservaId] = useState(reservaIdInicial ?? null);
   const [titulo, setTitulo] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [error, setError] = useState('');
@@ -31,6 +38,12 @@ export function NuevoIncidenteScreen({ onCreated }) {
       .catch(() => setReservasError('No pudimos cargar tus reservas. Igual podes reportar sin reserva.'));
   }, []);
 
+  useEffect(() => {
+    setReservaId(reservaIdInicial ?? null);
+  }, [reservaIdInicial]);
+
+  const reservaSel = reservas.find((r) => r.id === reservaId) || null;
+
   function validar() {
     if (titulo.trim().length < 5) return 'El título debe tener al menos 5 caracteres.';
     if (descripcion.trim().length < 10) return 'Describe el problema con al menos 10 caracteres.';
@@ -41,9 +54,11 @@ export function NuevoIncidenteScreen({ onCreated }) {
     if (loading) return;
     const v = validar();
     if (v) { setError(v); return; }
+    const nombreTipo = TIPO_INCIDENTE[tipo] || tipo;
+    const nombreReserva = reservaSel ? reservaSel.codigo : 'Sin reserva';
     Alert.alert(
       'Enviar reporte',
-      'Una vez enviado no podrás editarlo. ¿Confirmas el envío?',
+      `Tipo: ${nombreTipo}\nReserva: ${nombreReserva}\nTítulo: ${titulo.trim()}\n\nUna vez enviado no podrás editarlo. ¿Confirmas el envío?`,
       [
         { text: 'Revisar', style: 'cancel' },
         { text: 'Enviar', onPress: enviar },
@@ -83,6 +98,7 @@ export function NuevoIncidenteScreen({ onCreated }) {
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Reportar problema</Text>
+      {reservaSel && <Text style={styles.aviso}>Reportando sobre {reservaSel.codigo}</Text>}
       <ErrorBanner message={error} />
       <Text style={styles.label}>Tipo de problema</Text>
       <View style={styles.opts}>
@@ -92,6 +108,7 @@ export function NuevoIncidenteScreen({ onCreated }) {
           </Pressable>
         ))}
       </View>
+      <Text style={styles.ayuda}>{AYUDA_TIPO[tipo] || ''}</Text>
       <Text style={styles.label}>Reserva relacionada (opcional)</Text>
       {reservasError !== '' && <Text style={styles.muted}>{reservasError}</Text>}
       <View style={styles.opts}>
@@ -105,9 +122,9 @@ export function NuevoIncidenteScreen({ onCreated }) {
         ))}
       </View>
       <Text style={styles.label}>Título ({titulo.trim().length}/120)</Text>
-      <TextInput style={styles.input} value={titulo} onChangeText={(t) => setTitulo(t.slice(0, 120))} placeholder="Ej. Vuelo cancelado y estoy varada" placeholderTextColor={theme.colors.muted} />
+      <TextInput style={styles.input} value={titulo} onChangeText={(t) => setTitulo(t.slice(0, 120))} placeholder="Ej. Vuelo cancelado y estoy varada" placeholderTextColor={theme.colors.muted} maxLength={120} />
       <Text style={styles.label}>Descripción ({descripcion.trim().length}/2000, mín. 10)</Text>
-      <TextInput style={[styles.input, styles.area]} value={descripcion} onChangeText={(t) => setDescripcion(t.slice(0, 2000))} placeholder="Contanos qué pasó, n° de vuelo o reserva…" placeholderTextColor={theme.colors.muted} multiline numberOfLines={4} textAlignVertical="top" />
+      <TextInput style={[styles.input, styles.area]} value={descripcion} onChangeText={(t) => setDescripcion(t.slice(0, 2000))} placeholder="Contanos qué pasó, n° de vuelo o reserva…" placeholderTextColor={theme.colors.muted} multiline numberOfLines={4} textAlignVertical="top" maxLength={2000} />
       <AppButton title="Enviar reporte" onPress={submit} loading={loading} />
     </ScrollView>
   );
@@ -118,6 +135,8 @@ const styles = StyleSheet.create({
   content: { padding: theme.spacing.lg, gap: theme.spacing.sm },
   title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
   sub: { fontSize: theme.type.body, color: theme.colors.text },
+  aviso: { fontSize: theme.type.body, fontWeight: 'bold', color: theme.colors.primary, backgroundColor: '#EDE7FB', borderRadius: theme.radius.md, padding: theme.spacing.sm },
+  ayuda: { fontSize: theme.type.caption, color: theme.colors.muted, fontStyle: 'italic' },
   muted: { fontSize: theme.type.caption, color: theme.colors.muted },
   label: { fontSize: theme.type.caption, color: theme.colors.text, fontWeight: 'bold', marginTop: theme.spacing.sm },
   opts: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm },
