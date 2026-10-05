@@ -7,7 +7,8 @@ class IncidentesController {
       Response::error('Estado inválido', 400);
     }
     $m = new Incidente($db);
-    Response::json(['data' => $m->listByUser((int)$claims['sub'], $estado)], 200);
+    $rows = $m->listByUser((int)$claims['sub'], $estado);
+    Response::json(['data' => array_map([Incidente::class, 'toPublic'], $rows)], 200);
   }
 
   public static function crear(PDO $db, array $claims, array $body): void {
@@ -24,8 +25,8 @@ class IncidentesController {
 
     $rid = null;
     if ($reservaId !== null && $reservaId !== '') {
-      if (!is_numeric($reservaId)) Response::error('reserva_id inválida', 400);
-      $rid = (int)$reservaId;
+      $rid = filter_var($reservaId, FILTER_VALIDATE_INT);
+      if ($rid === false || $rid <= 0) Response::error('reserva_id inválida', 400);
       $r = new Reserva($db);
       if (!$r->belongsTo($rid, (int)$claims['sub'])) {
         Response::error('Reserva no encontrada', 404);
@@ -34,7 +35,8 @@ class IncidentesController {
 
     $m = new Incidente($db);
     $id = $m->create((int)$claims['sub'], $rid, $tipo, $titulo, $descripcion);
-    Response::json(['data' => $m->findById($id)], 201);
+    // Contrato: el viajero nunca ve prioridad (se ignora si el cliente la envia).
+    Response::json(['data' => Incidente::toPublic($m->findById($id))], 201);
   }
 
   private static function propio(PDO $db, array $claims, int $id): array {
@@ -46,7 +48,7 @@ class IncidentesController {
   }
 
   public static function ver(PDO $db, array $claims, int $id): void {
-    Response::json(['data' => self::propio($db, $claims, $id)], 200);
+    Response::json(['data' => Incidente::toPublic(self::propio($db, $claims, $id))], 200);
   }
 
   public static function respuestas(PDO $db, array $claims, int $id): void {

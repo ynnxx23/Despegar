@@ -38,7 +38,16 @@ class AuthController {
     }
 
     // Decisión §22 plan: registro público SOLO crea viajero (agentes por seed/admin).
-    $id = $u->create($nombre, $email, Usuario::hashPassword($password), 'viajero');
+    // Guarda contra carrera (doble click): unique violation 23505 -> 409.
+    try {
+      $id = $u->create($nombre, $email, Usuario::hashPassword($password), 'viajero');
+    } catch (PDOException $e) {
+      if (($e->errorInfo[0] ?? '') === '23505') {
+        Response::error('El email ya está registrado', 409);
+      }
+      error_log('register: ' . $e->getMessage());
+      Response::error('Error interno del servidor', 500);
+    }
     $safe = Usuario::toSafe($u->findById($id));
     Response::json(['user' => $safe, 'token' => self::issueToken($safe)], 201);
   }
