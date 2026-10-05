@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
-import { EmptyState, ErrorBanner } from '../../shared/components';
+import { EmptyState, ErrorBanner, Badge } from '../../shared/components';
 import { TIPO_RESERVA, fmtFecha } from '../../shared/format';
 
 export function ItinerarioScreen() {
@@ -48,7 +48,8 @@ export function ItinerarioScreen() {
           <Text style={styles.body}>
             {r.tipo === 'vuelo' ? `${r.origen || '?'} - ${r.destino || '?'}` : r.hotel || 'Hotel'}
           </Text>
-          <Text style={styles.muted}>{fmtFecha(r.fecha_inicio)}{r.fecha_fin ? ` — ${fmtFecha(r.fecha_fin)}` : ''} · {r.estado}</Text>
+          <Text style={styles.muted}>{fmtFecha(r.fecha_inicio)}{r.fecha_fin ? ` — ${fmtFecha(r.fecha_fin)}` : ''}</Text>
+          <Badge text={r.estado} color={theme.status[r.estado] || theme.colors.muted} />
         </View>
       ))}
     </ScrollView>

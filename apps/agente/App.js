@@ -1,6 +1,7 @@
 // App agente F6: sesión (F4) + cola y detalle de gestión.
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../shared/theme';
 import { api, setAuthToken, clearAuthToken, setOnUnauthorized } from '../shared/api';
 import { authStore } from '../shared/auth';
@@ -56,24 +57,43 @@ export default function App() {
   }
 
   if (!ready) {
-    return <View style={styles.center}><ActivityIndicator color={theme.colors.primary} /></View>;
+    return (
+      <SafeAreaProvider>
+        <View style={styles.center}><ActivityIndicator color={theme.colors.primary} /></View>
+      </SafeAreaProvider>
+    );
   }
-  if (!user) return <LoginScreen onSuccess={handleSuccess} />;
+  if (!user) {
+    return (
+      <SafeAreaProvider>
+        <LoginScreen onSuccess={handleSuccess} />
+      </SafeAreaProvider>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.root}>
-      <View style={styles.header}>
+    <SafeAreaProvider>
+      <Shell user={user} detalleId={detalleId} colaKey={colaKey} onLogout={logout} onOpen={setDetalleId} onBack={() => { setDetalleId(null); setColaKey((k) => k + 1); }} />
+    </SafeAreaProvider>
+  );
+}
+
+function Shell({ user, detalleId, colaKey, onLogout, onOpen, onBack }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={styles.root}>
+      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md }]}>
         <Text style={styles.hello}>Soporte · {user.nombre}</Text>
-        <Pressable onPress={logout} accessibilityRole="button"><Text style={styles.exit}>Salir</Text></Pressable>
+        <Pressable onPress={onLogout} accessibilityRole="button"><Text style={styles.exit}>Salir</Text></Pressable>
       </View>
-      <View style={styles.body}>
+      <View style={[styles.body, { paddingBottom: insets.bottom }]}>
         {detalleId !== null ? (
-          <DetalleGestionScreen id={detalleId} onBack={() => { setDetalleId(null); setColaKey((k) => k + 1); }} />
+          <DetalleGestionScreen id={detalleId} onBack={onBack} />
         ) : (
-          <ColaScreen onOpen={setDetalleId} refreshKey={colaKey} />
+          <ColaScreen onOpen={onOpen} refreshKey={colaKey} />
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

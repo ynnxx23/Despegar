@@ -43,6 +43,7 @@ export function MisIncidentesScreen({ onOpen, refreshKey }) {
         ))}
       </View>
       <ErrorBanner message={error} />
+      {error !== '' && <Text style={styles.retry} onPress={load}>Toca para reintentar</Text>}
       {data === null && error === '' && <ActivityIndicator color={theme.colors.primary} />}
       {data !== null && data.length === 0 && (
         <EmptyState title="Sin incidentes" hint="Todavía no reportaste problemas. Si algo falla en tu viaje, repórtalo." />
@@ -53,8 +54,12 @@ export function MisIncidentesScreen({ onOpen, refreshKey }) {
           <Text style={styles.muted}>{TIPO_INCIDENTE[i.tipo] || i.tipo} · {fmtFecha(i.creado_at)}</Text>
           <View style={styles.row}>
             <Badge text={i.estado} color={theme.status[i.estado] || theme.colors.muted} />
-            <Badge text={`Prioridad ${i.prioridad}`} color={theme.priority[i.prioridad] || theme.colors.muted} />
           </View>
+          {i.ultima_respuesta?.mensaje ? (
+            <Text style={styles.preview} numberOfLines={2}>
+              {i.ultima_respuesta?.autor ? `${i.ultima_respuesta.autor}: ` : ''}{i.ultima_respuesta.mensaje}
+            </Text>
+          ) : null}
         </Pressable>
       ))}
     </ScrollView>
@@ -65,30 +70,37 @@ export function DetalleIncidenteScreen({ id, onBack }) {
   const [inc, setInc] = useState(null);
   const [hilo, setHilo] = useState([]);
   const [error, setError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [a, b] = await Promise.all([api.get(`/incidentes/${id}`), api.get(`/incidentes/${id}/respuestas`)]);
-        setInc(a.data);
-        setHilo(b.data);
-      } catch (e) {
-        setError(e.message);
-      }
-    })();
+  const load = useCallback(async () => {
+    setError('');
+    try {
+      const [a, b] = await Promise.all([api.get(`/incidentes/${id}`), api.get(`/incidentes/${id}/respuestas`)]);
+      setInc(a.data);
+      setHilo(b.data);
+    } catch (e) {
+      setError(e.message);
+    }
   }, [id]);
 
+  useEffect(() => { load(); }, [load]);
+
+  async function onRefresh() { setRefreshing(true); await load(); setRefreshing(false); }
+
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.root} contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.colors.primary]} />}
+    >
       <AppButton title="Volver" onPress={onBack} variant="ghost" />
       <ErrorBanner message={error} />
+      {error !== '' && <Text style={styles.retry} onPress={load}>Toca para reintentar</Text>}
       {!inc && error === '' && <ActivityIndicator color={theme.colors.primary} />}
       {inc && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>#{inc.id} · {inc.titulo}</Text>
           <View style={styles.row}>
             <Badge text={inc.estado} color={theme.status[inc.estado] || theme.colors.muted} />
-            <Badge text={`Prioridad ${inc.prioridad}`} color={theme.priority[inc.prioridad] || theme.colors.muted} />
           </View>
           <Text style={styles.muted}>{TIPO_INCIDENTE[inc.tipo] || inc.tipo} · {fmtFecha(inc.creado_at)}</Text>
           <Text style={styles.body}>{inc.descripcion}</Text>
@@ -96,12 +108,15 @@ export function DetalleIncidenteScreen({ id, onBack }) {
       )}
       {inc && <Text style={styles.subtitle}>Respuestas de soporte ({hilo.length})</Text>}
       {inc && hilo.length === 0 && <Text style={styles.muted}>Aún sin respuestas. Te avisaremos aquí cuando el agente conteste.</Text>}
-      {hilo.map((m) => (
-        <View key={m.id} style={styles.reply}>
-          <Text style={styles.muted}>{m.autor} · {fmtFecha(m.creado_at)}</Text>
-          <Text style={styles.body}>{m.mensaje}</Text>
-        </View>
-      ))}
+      {hilo.map((m) => {
+        const esAgente = m.autor_rol ? m.autor_rol === 'agente' : false;
+        return (
+          <View key={m.id} style={[styles.reply, esAgente ? styles.replyAgente : styles.replyViajero]}>
+            <Text style={styles.muted}>{m.autor || (esAgente ? 'Soporte' : 'Vos')} · {fmtFecha(m.creado_at)}</Text>
+            <Text style={styles.body}>{m.mensaje}</Text>
+          </View>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -111,6 +126,7 @@ const styles = StyleSheet.create({
   content: { padding: theme.spacing.lg, gap: theme.spacing.md },
   title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
   subtitle: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text },
+  retry: { color: theme.colors.primary, fontWeight: 'bold' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm },
   chip: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 999, paddingHorizontal: theme.spacing.md, minHeight: 40, justifyContent: 'center', backgroundColor: theme.colors.card },
   chipActive: { borderColor: theme.colors.primary, backgroundColor: '#EDE7FB' },
@@ -120,5 +136,8 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text },
   body: { fontSize: theme.type.body, color: theme.colors.text },
   muted: { fontSize: theme.type.caption, color: theme.colors.muted },
-  reply: { backgroundColor: '#EDE7FB', borderRadius: theme.radius.md, padding: theme.spacing.md, gap: 4 },
+  preview: { fontSize: theme.type.caption, color: theme.colors.muted, fontStyle: 'italic' },
+  reply: { borderRadius: theme.radius.md, padding: theme.spacing.md, gap: 4, maxWidth: '85%' },
+  replyAgente: { backgroundColor: '#EDE7FB', alignSelf: 'flex-end' },
+  replyViajero: { backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, alignSelf: 'flex-start' },
 });

@@ -1,7 +1,8 @@
 // App viajero F5: sesión (F4) + navegación por pestañas sin librerías:
 // Itinerario · Reportar · Mis incidentes (+ detalle). Header con salida.
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../shared/theme';
 import { api, setAuthToken, clearAuthToken, setOnUnauthorized } from '../shared/api';
 import { authStore } from '../shared/auth';
@@ -18,6 +19,15 @@ const TABS = [
 ];
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppShell />
+    </SafeAreaProvider>
+  );
+}
+
+function AppShell() {
+  const insets = useSafeAreaInsets();
   const [auth, setAuth] = useState('login');
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
@@ -70,16 +80,21 @@ export default function App() {
   }
 
   if (!ready) {
-    return <View style={styles.center}><ActivityIndicator color={theme.colors.primary} /></View>;
+    return <View style={[styles.center, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><ActivityIndicator color={theme.colors.primary} /></View>;
   }
   if (auth !== 'app' || !user) {
-    if (auth === 'register') return <RegisterScreen onSuccess={handleSuccess} goLogin={() => setAuth('login')} />;
-    return <LoginScreen onSuccess={handleSuccess} goRegister={() => setAuth('register')} />;
+    return (
+      <View style={[styles.authRoot, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        {auth === 'register'
+          ? <RegisterScreen onSuccess={handleSuccess} goLogin={() => setAuth('login')} />
+          : <LoginScreen onSuccess={handleSuccess} goRegister={() => setAuth('register')} />}
+      </View>
+    );
   }
 
   return (
-    <SafeAreaView style={styles.root}>
-      <View style={styles.header}>
+    <View style={styles.root}>
+      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md }]}>
         <Text style={styles.hello}>Hola, {user.nombre}</Text>
         <Pressable onPress={logout} accessibilityRole="button"><Text style={styles.exit}>Salir</Text></Pressable>
       </View>
@@ -95,7 +110,7 @@ export default function App() {
         )}
       </View>
       {detalleId === null && (
-        <View style={styles.tabs}>
+        <View style={[styles.tabs, { paddingBottom: insets.bottom, minHeight: 56 + insets.bottom }]}>
           {TABS.map((t) => (
             <Pressable key={t.key} onPress={() => setTab(t.key)} style={[styles.tab, tab === t.key && styles.tabActive]} accessibilityRole="button">
               <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
@@ -103,12 +118,13 @@ export default function App() {
           ))}
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
+  authRoot: { flex: 1, backgroundColor: theme.colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: theme.spacing.md },
   hello: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text },
