@@ -13,6 +13,7 @@ class AdminController {
 
     $m = new Incidente($db);
     $data = $m->listAll($estado, $prioridad, $orden, $limit, ($page - 1) * $limit);
+    $data = array_map([Incidente::class, 'toAgent'], $data);
     Response::json(['data' => $data, 'total' => $m->countAll($estado, $prioridad), 'page' => $page, 'limit' => $limit], 200);
   }
 
@@ -20,19 +21,40 @@ class AdminController {
     $m = new Incidente($db);
     $inc = $m->findById($id);
     if (!$inc) Response::error('Incidente no encontrado', 404);
-    Response::json(['data' => $inc], 200);
+    $st = $db->prepare('SELECT nombre, email FROM usuarios WHERE id = ? LIMIT 1');
+    $st->execute([(int)$inc['user_id']]);
+    $u = $st->fetch();
+    $usuario = $u ? ['nombre' => $u['nombre'], 'email' => $u['email']] : null;
+    $reserva = null;
+    if ($inc['reserva_id'] !== null) {
+      $st = $db->prepare('SELECT id, codigo, tipo, origen, destino, hotel FROM reservas WHERE id = ? LIMIT 1');
+      $st->execute([(int)$inc['reserva_id']]);
+      $r = $st->fetch();
+      if ($r) {
+        $r['id'] = (int)$r['id'];
+        $reserva = $r;
+      }
+    }
+    Response::json(['data' => ['incidente' => Incidente::toAgent($inc), 'usuario' => $usuario, 'reserva' => $reserva]], 200);
   }
 
-  public static function actualizar(PDO $db, int $id, array $body): void {
+  public static function actualizar(PDO $db, array $claims, int $id, array $body): void {
     $m = new Incidente($db);
-    if (!$m->findById($id)) Response::error('Incidente no encontrado', 404);
+    $actual = $m->findById($id);
+    if (!$actual) Response::error('Incidente no encontrado', 404);
     $prioridad = $body['prioridad'] ?? null;
     $estado = $body['estado'] ?? null;
     if ($prioridad === null && $estado === null) Response::error('Nada para actualizar (prioridad y/o estado)', 400);
     if ($prioridad !== null && !in_array($prioridad, Incidente::PRIORIDADES, true)) Response::error('Prioridad inválida', 400);
     if ($estado !== null && !in_array($estado, Incidente::ESTADOS, true)) Response::error('Estado inválido', 400);
-    $m->update($id, $prioridad, $estado);
-    Response::json(['data' => $m->findById($id)], 200);
+    // Prioridad obligatoria antes de Resuelto (sin triar no se puede cerrar).
+    $efectiva = $prioridad ?? ($actual['prioridad'] ?? null);
+    if ($estado === 'Resuelto' && $efectiva === null) {
+      Response::error('Prioridad requerida antes de resolver', 400);
+    }
+    $m->update($id, $prioridad, $estado, (int)($claims['sub'] ?? 0) ?: null);
+    // TODO: registrar en incidente_historial (incidente_id, actor_id, cambio, creado_at) cuando exista la tabla.
+    Response::json(['data' => Incidente::toAgent($m->findById($id))], 200);
   }
 
   public static function responder(PDO $db, array $claims, int $id, array $body): void {

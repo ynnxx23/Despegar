@@ -16,6 +16,12 @@ require_once __DIR__ . '/../src/Controllers/AdminController.php';
 
 Config::load(__DIR__ . '/../.env');
 
+// Fail-fast: sin secreto JWT robusto no se opera (nunca exponer el valor al cliente).
+if (strlen(Config::get('JWT_SECRET', '')) < 32) {
+  error_log('Falta JWT_SECRET de al menos 32 caracteres');
+  Response::error('Error interno del servidor', 500);
+}
+
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
@@ -32,6 +38,7 @@ function bodyJson(): array {
   $raw = file_get_contents('php://input');
   if ($raw === '' || $raw === false) return [];
   $data = json_decode($raw, true);
+  if (json_last_error() !== JSON_ERROR_NONE) Response::error('JSON malformado', 400);
   return is_array($data) ? $data : [];
 }
 
@@ -75,16 +82,22 @@ if ($method === 'POST' && $path === '/api/incidentes') {
 if (preg_match('#^/api/incidentes/(\d+)$#', $path, $mch)) {
   $claims = Auth::requireRole(['viajero', 'agente']);
   if ($method === 'GET') {
-    if ($claims['rol'] === 'agente') AdminController::ver($db, (int)$mch[1]);
-    IncidentesController::ver($db, $claims, (int)$mch[1]);
+    if ($claims['rol'] === 'agente') {
+      AdminController::ver($db, (int)$mch[1]);
+    } else {
+      IncidentesController::ver($db, $claims, (int)$mch[1]);
+    }
   }
 }
 
 if (preg_match('#^/api/incidentes/(\d+)/respuestas$#', $path, $mch)) {
   $claims = Auth::requireRole(['viajero', 'agente']);
   if ($method === 'GET') {
-    if ($claims['rol'] === 'agente') AdminController::respuestas($db, (int)$mch[1]);
-    IncidentesController::respuestas($db, $claims, (int)$mch[1]);
+    if ($claims['rol'] === 'agente') {
+      AdminController::respuestas($db, (int)$mch[1]);
+    } else {
+      IncidentesController::respuestas($db, $claims, (int)$mch[1]);
+    }
   }
 }
 
@@ -101,14 +114,20 @@ if ($method === 'GET' && $path === '/api/admin/incidentes/resumen') {
 
 if (preg_match('#^/api/admin/incidentes/(\d+)/respuestas$#', $path, $mch)) {
   $claims = Auth::requireRole(['agente']);
-  if ($method === 'GET') AdminController::respuestas($db, (int)$mch[1]);
-  if ($method === 'POST') AdminController::responder($db, $claims, (int)$mch[1], bodyJson());
+  if ($method === 'GET') {
+    AdminController::respuestas($db, (int)$mch[1]);
+  } elseif ($method === 'POST') {
+    AdminController::responder($db, $claims, (int)$mch[1], bodyJson());
+  }
 }
 
 if (preg_match('#^/api/admin/incidentes/(\d+)$#', $path, $mch)) {
-  Auth::requireRole(['agente']);
-  if ($method === 'GET') AdminController::ver($db, (int)$mch[1]);
-  if ($method === 'PUT') AdminController::actualizar($db, (int)$mch[1], bodyJson());
+  $claims = Auth::requireRole(['agente']);
+  if ($method === 'GET') {
+    AdminController::ver($db, (int)$mch[1]);
+  } elseif ($method === 'PUT') {
+    AdminController::actualizar($db, $claims, (int)$mch[1], bodyJson());
+  }
 }
 
 // Sin coincidencia: 404 (los endpoints F3 ya están cableados arriba).
