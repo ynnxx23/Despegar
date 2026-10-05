@@ -5,12 +5,18 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
 import { AppButton, ErrorBanner } from '../../shared/components';
-import { TIPO_INCIDENTE } from '../../shared/format';
+import { TIPO_INCIDENTE, fmtFecha } from '../../shared/format';
 
 const TIPOS = Object.keys(TIPO_INCIDENTE);
 
+function detalleReserva(r) {
+  const ruta = r.tipo === 'vuelo' ? `${r.origen || '?'} - ${r.destino || '?'}` : r.hotel || 'Hotel';
+  return `${r.codigo} · ${fmtFecha(r.fecha_inicio)} · ${ruta}`;
+}
+
 export function NuevoIncidenteScreen({ onCreated }) {
   const [reservas, setReservas] = useState([]);
+  const [reservasError, setReservasError] = useState('');
   const [tipo, setTipo] = useState('Vuelo_cancelado');
   const [reservaId, setReservaId] = useState(null);
   const [titulo, setTitulo] = useState('');
@@ -20,7 +26,9 @@ export function NuevoIncidenteScreen({ onCreated }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.get('/itinerario').then((r) => setReservas(r.data)).catch(() => {});
+    api.get('/itinerario')
+      .then((r) => setReservas(r.data))
+      .catch(() => setReservasError('No pudimos cargar tus reservas. Igual podes reportar sin reserva.'));
   }, []);
 
   function validar() {
@@ -30,6 +38,7 @@ export function NuevoIncidenteScreen({ onCreated }) {
   }
 
   function submit() {
+    if (loading) return;
     const v = validar();
     if (v) { setError(v); return; }
     Alert.alert(
@@ -43,6 +52,7 @@ export function NuevoIncidenteScreen({ onCreated }) {
   }
 
   async function enviar() {
+    if (loading) return;
     setError('');
     setLoading(true);
     try {
@@ -83,13 +93,14 @@ export function NuevoIncidenteScreen({ onCreated }) {
         ))}
       </View>
       <Text style={styles.label}>Reserva relacionada (opcional)</Text>
+      {reservasError !== '' && <Text style={styles.muted}>{reservasError}</Text>}
       <View style={styles.opts}>
         <Pressable onPress={() => setReservaId(null)} style={[styles.opt, reservaId === null && styles.optActive]} accessibilityRole="button">
           <Text style={[styles.optText, reservaId === null && styles.optTextActive]}>Sin reserva</Text>
         </Pressable>
         {reservas.map((r) => (
           <Pressable key={r.id} onPress={() => setReservaId(r.id)} style={[styles.opt, reservaId === r.id && styles.optActive]} accessibilityRole="button">
-            <Text style={[styles.optText, reservaId === r.id && styles.optTextActive]}>{r.codigo}</Text>
+            <Text style={[styles.optText, reservaId === r.id && styles.optTextActive]}>{detalleReserva(r)}</Text>
           </Pressable>
         ))}
       </View>
@@ -107,6 +118,7 @@ const styles = StyleSheet.create({
   content: { padding: theme.spacing.lg, gap: theme.spacing.sm },
   title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
   sub: { fontSize: theme.type.body, color: theme.colors.text },
+  muted: { fontSize: theme.type.caption, color: theme.colors.muted },
   label: { fontSize: theme.type.caption, color: theme.colors.text, fontWeight: 'bold', marginTop: theme.spacing.sm },
   opts: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm },
   opt: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 999, paddingHorizontal: theme.spacing.md, minHeight: 44, justifyContent: 'center', backgroundColor: theme.colors.card },

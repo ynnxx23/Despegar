@@ -1,11 +1,13 @@
 // Login agente: sin registro público (decisión plan §22: agentes por seed/admin).
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
 import { AppButton, AppInput, ErrorBanner } from '../../shared/components';
 
 export function LoginScreen({ onSuccess }) {
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -28,7 +30,7 @@ export function LoginScreen({ onSuccess }) {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingTop: insets.top + theme.spacing.lg, paddingBottom: insets.bottom + theme.spacing.lg }]}>
       <Text style={styles.title}>Centro de Resolución</Text>
       <Text style={styles.sub}>Acceso interno de agentes. Sin registro público.</Text>
       <ErrorBanner message={error} />
