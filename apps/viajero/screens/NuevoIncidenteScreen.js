@@ -96,7 +96,7 @@ export function NuevoIncidenteScreen({ onCreated, reservaIdInicial }) {
   }
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.root} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Reportar problema</Text>
       {reservaSel && <Text style={styles.aviso}>Reportando sobre {reservaSel.codigo}</Text>}
       <ErrorBanner message={error} />
@@ -122,9 +122,9 @@ export function NuevoIncidenteScreen({ onCreated, reservaIdInicial }) {
         ))}
       </View>
       <Text style={styles.label}>Título ({titulo.trim().length}/120)</Text>
-      <TextInput style={styles.input} value={titulo} onChangeText={(t) => setTitulo(t.slice(0, 120))} placeholder="Ej. Vuelo cancelado y estoy varada" placeholderTextColor={theme.colors.muted} maxLength={120} />
+      <TextInput style={styles.input} value={titulo} onChangeText={(t) => setTitulo(t.slice(0, 120))} placeholder="Ej. Vuelo cancelado y estoy varada" placeholderTextColor={theme.colors.muted} maxLength={120} autoCorrect={false} autoCapitalize="sentences" returnKeyType="next" />
       <Text style={styles.label}>Descripción ({descripcion.trim().length}/2000, mín. 10)</Text>
-      <TextInput style={[styles.input, styles.area]} value={descripcion} onChangeText={(t) => setDescripcion(t.slice(0, 2000))} placeholder="Contanos qué pasó, n° de vuelo o reserva…" placeholderTextColor={theme.colors.muted} multiline numberOfLines={4} textAlignVertical="top" maxLength={2000} />
+      <TextInput style={[styles.input, styles.area]} value={descripcion} onChangeText={(t) => setDescripcion(t.slice(0, 2000))} placeholder="Contanos qué pasó, n° de vuelo o reserva…" placeholderTextColor={theme.colors.muted} multiline numberOfLines={4} textAlignVertical="top" maxLength={2000} autoCorrect={false} returnKeyType="send" onSubmitEditing={submit} />
       <AppButton title="Enviar reporte" onPress={submit} loading={loading} />
     </ScrollView>
   );

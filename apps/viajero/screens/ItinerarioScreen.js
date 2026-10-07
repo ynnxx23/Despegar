@@ -1,6 +1,6 @@
 // Itinerario del viajero: GET /api/itinerario con carga / vacío / error + reintentar.
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
 import { AppButton, EmptyState, ErrorBanner, Badge } from '../../shared/components';
@@ -68,51 +68,68 @@ export function ItinerarioScreen({ onReportar }) {
 
   function tarjeta(r, destacada) {
     return (
-      <View key={r.id} style={destacada ? styles.destacada : styles.card}>
+      <View style={destacada ? styles.destacada : styles.card}>
         {destacada && <Text style={styles.sello}>PRÓXIMO VIAJE · {textoCuenta(r)}</Text>}
-        <Text style={destacada ? styles.codigoGrande : styles.cardTitle}>{TIPO_RESERVA[r.tipo] || r.tipo} · {r.codigo}</Text>
+        <Text style={destacada ? styles.codigoGrande : styles.cardTitle}>{TIPO_RESERVA[r?.tipo] || r?.tipo} · {r?.codigo}</Text>
         <Text style={styles.body}>{rutaReserva(r)}</Text>
-        <Text style={styles.muted}>{fmtFecha(r.fecha_inicio)}{r.fecha_fin ? ` — ${fmtFecha(r.fecha_fin)}` : ''}{!destacada ? ` · ${textoCuenta(r)}` : ''}</Text>
-        <Badge text={r.estado} color={theme.status[r.estado] || theme.colors.muted} />
-        <AppButton title="Reportar sobre esta reserva" onPress={() => onReportar?.(r.id)} variant="ghost" />
+        <Text style={styles.muted}>{fmtFecha(r?.fecha_inicio)}{r?.fecha_fin ? ` — ${fmtFecha(r.fecha_fin)}` : ''}{!destacada ? ` · ${textoCuenta(r)}` : ''}</Text>
+        <Badge text={r?.estado} color={theme.status[r?.estado] || theme.colors.muted} />
+        <AppButton title="Reportar sobre esta reserva" onPress={() => onReportar?.(r?.id)} variant="ghost" />
       </View>
     );
   }
 
+  const restoProximos = proximos.filter((r) => !proximo || r?.id !== proximo?.id);
+  const filas = [...restoProximos, ...pasados];
+  const cargando = data === null && error === '';
+
+  function header() {
+    return (
+      <View style={styles.headerCol}>
+        <Text style={styles.title}>Mi itinerario</Text>
+        <ErrorBanner message={error} />
+        {error !== '' && <Text style={styles.retry} onPress={load}>Toca para reintentar</Text>}
+        {cargando && <ActivityIndicator color={theme.colors.primary} />}
+        {data !== null && data.length > 0 && (
+          <Text style={styles.muted}>{vuelos} vuelos · {hoteles} hoteles</Text>
+        )}
+        {proximo && tarjeta(proximo, true)}
+        {data !== null && data.length > 0 && (
+          <Text style={styles.seccion}>Próximos ({proximos.length}) · Pasados ({pasados.length})</Text>
+        )}
+      </View>
+    );
+  }
+
+  function vacio() {
+    if (cargando || error !== '') return null;
+    if (data !== null && data.length === 0) {
+      if (onReportar) {
+        return <EmptyState title="Aún no tienes viajes" hint="Cuando compres un viaje aparecerá aquí tu itinerario." actionTitle="Reportar problema" onAction={() => onReportar?.(null)} />;
+      }
+      return <EmptyState title="Aún no tienes viajes" hint="Cuando compres un viaje aparecerá aquí tu itinerario." />;
+    }
+    return null;
+  }
+
   return (
-    <ScrollView
+    <FlatList
       style={styles.root}
       contentContainerStyle={styles.content}
+      data={filas}
+      keyExtractor={(r) => String(r?.id)}
+      renderItem={({ item }) => tarjeta(item, false)}
+      ListHeaderComponent={header()}
+      ListEmptyComponent={vacio()}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.colors.primary]} />}
-    >
-      <Text style={styles.title}>Mi itinerario</Text>
-      <ErrorBanner message={error} />
-      {error !== '' && <Text style={styles.retry} onPress={load}>Toca para reintentar</Text>}
-      {data === null && error === '' && <ActivityIndicator color={theme.colors.primary} />}
-      {data !== null && data.length === 0 && (
-        onReportar
-          ? <EmptyState title="Aún no tienes viajes" hint="Cuando compres un viaje aparecerá aquí tu itinerario." actionTitle="Reportar problema" onAction={() => onReportar?.(null)} />
-          : <EmptyState title="Aún no tienes viajes" hint="Cuando compres un viaje aparecerá aquí tu itinerario." />
-      )}
-      {data !== null && data.length > 0 && (
-        <Text style={styles.muted}>{vuelos} vuelos · {hoteles} hoteles</Text>
-      )}
-      {proximo && tarjeta(proximo, true)}
-      {data !== null && data.length > 0 && (
-        <Text style={styles.seccion}>Próximos ({proximos.length})</Text>
-      )}
-      {proximos.filter((r) => !proximo || r.id !== proximo.id).map((r) => tarjeta(r, false))}
-      {pasados.length > 0 && (
-        <Text style={styles.seccion}>Pasados ({pasados.length})</Text>
-      )}
-      {pasados.map((r) => tarjeta(r, false))}
-    </ScrollView>
+    />
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   content: { padding: theme.spacing.lg, gap: theme.spacing.md },
+  headerCol: { gap: theme.spacing.md },
   title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
   seccion: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text, marginTop: theme.spacing.sm },
   retry: { color: theme.colors.primary, fontWeight: 'bold' },

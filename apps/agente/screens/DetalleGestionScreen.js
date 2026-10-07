@@ -4,10 +4,12 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Activi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
-import { AppButton, Badge, ErrorBanner } from '../../shared/components';
+import { AppButton, Badge, EmptyState, ErrorBanner } from '../../shared/components';
 import { TIPO_INCIDENTE, TIPO_RESERVA, fmtFecha } from '../../shared/format';
 
-export function DetalleGestionScreen({ id, onBack }) {
+const MAX_RESPUESTA = 2000;
+
+export function DetalleGestionScreen({ id, onBack, onChange }) {
   const insets = useSafeAreaInsets();
   const [inc, setInc] = useState(null);
   const [viajero, setViajero] = useState(null);
@@ -19,41 +21,60 @@ export function DetalleGestionScreen({ id, onBack }) {
   const [savingReply, setSavingReply] = useState(false);
   const [motivoReapertura, setMotivoReapertura] = useState('');
   const [estadoPendiente, setEstadoPendiente] = useState(null);
+  const [dirty, setDirty] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
     try {
       const [a, b] = await Promise.all([api.get(`/admin/incidentes/${id}`), api.get(`/admin/incidentes/${id}/respuestas`)]);
-      const payload = a.data ?? {};
-      setInc(payload.incidente ?? payload);
-      setViajero(payload.usuario ?? null);
-      setReserva(payload.reserva ?? null);
-      setHilo(b.data ?? []);
+      const payload = a?.data ?? {};
+      setInc(payload?.incidente ?? payload);
+      setViajero(payload?.usuario ?? null);
+      setReserva(payload?.reserva ?? null);
+      setHilo(b?.data ?? []);
     } catch (e) {
-      setError(e.message);
+      setError(e?.message ?? 'No se pudo cargar el caso.');
     }
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  function marcarCambio() {
+    if (!dirty) setDirty(true);
+    try { onChange?.(true); } catch (e) { /* callback opcional */ }
+  }
+
+  function volver() {
+    try { onBack?.(dirty); } catch (e) { /* navegación opcional */ }
+  }
 
   async function put(parche) {
     setError('');
     setSavingPut(true);
     try {
       const r = await api.put(`/admin/incidentes/${id}`, parche);
-      const payload = r.data ?? {};
-      setInc(payload.incidente ?? payload);
-      if (payload.usuario !== undefined) setViajero(payload.usuario);
-      if (payload.reserva !== undefined) setReserva(payload.reserva);
+      const payload = r?.data ?? {};
+      setInc(payload?.incidente ?? payload);
+      if (payload?.usuario !== undefined) setViajero(payload.usuario);
+      if (payload?.reserva !== undefined) setReserva(payload.reserva);
+      marcarCambio();
     } catch (e) {
-      setError(e.message);
+      setError(e?.message ?? 'No se pudo guardar el cambio.');
     } finally {
       setSavingPut(false);
     }
   }
 
+  function textoCierre() {
+    const tipo = inc?.tipo;
+    if (tipo === 'Fraude' || tipo === 'Otro') {
+      return 'Confirma que el caso está resuelto para el viajero.';
+    }
+    return 'Confirma que ya hablaste con la aerolínea/hotel y el viajero fue atendido.';
+  }
+
   function cerrar() {
-    Alert.alert('Marcar resuelto', 'Confirma que ya hablaste con la aerolínea/hotel y el viajero fue atendido.', [
+    Alert.alert('Marcar resuelto', textoCierre(), [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Resuelto', onPress: () => put({ estado: 'Resuelto' }) },
     ]);
@@ -95,14 +116,31 @@ export function DetalleGestionScreen({ id, onBack }) {
 
   async function responder() {
     setError('');
-    if (mensaje.trim().length < 2) { setError('Escribe una respuesta de al menos 2 caracteres.'); return; }
+    const texto = mensaje.trim();
+    if (texto.length < 2) { setError('Escribe una respuesta de al menos 2 caracteres.'); return; }
     setSavingReply(true);
     try {
-      await api.post(`/admin/incidentes/${id}/respuestas`, { mensaje: mensaje.trim() });
+      const r = await api.post(`/admin/incidentes/${id}/respuestas`, { mensaje: texto });
+      const nuevo = r?.data ?? null;
       setMensaje('');
-      await load();
+      marcarCambio();
+      if (nuevo?.id != null) {
+        setHilo((prev) => ([
+          ...(prev ?? []),
+          {
+            id: nuevo.id,
+            mensaje: nuevo.mensaje ?? texto,
+            incidente_id: nuevo.incidente_id ?? id,
+            creado_at: nuevo.creado_at ?? new Date().toISOString(),
+            autor: nuevo.autor ?? 'Soporte',
+            autor_rol: nuevo.autor_rol ?? 'agente',
+          },
+        ]));
+      } else {
+        await load();
+      }
     } catch (e) {
-      setError(e.message);
+      setError(e?.message ?? 'No se pudo enviar la respuesta.');
     } finally {
       setSavingReply(false);
     }
@@ -124,24 +162,43 @@ export function DetalleGestionScreen({ id, onBack }) {
     : '';
 
   return (
-    <ScrollView
-      style={styles.root}
-      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + theme.spacing.lg }]}
-    >
-      <AppButton title="Volver a la cola" onPress={onBack} variant="ghost" />
-      <ErrorBanner message={error} />
-      {!inc && error === '' && <ActivityIndicator color={theme.colors.primary} />}
-      {inc && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>#{inc.id} · {inc.titulo}</Text>
-          <View style={styles.row}>
-            <Badge text={inc.estado} color={theme.status[inc.estado] || theme.colors.muted} />
-            <Badge text={`Prioridad ${inc.prioridad}`} color={theme.priority[inc.prioridad] || theme.colors.muted} />
+    <View style={styles.shell}>
+      <View style={styles.sticky}>
+        <Pressable
+          onPress={volver}
+          accessibilityRole="button"
+          accessibilityLabel={`Volver a la cola, caso ${inc?.id ?? id}`}
+          style={styles.backBtn}
+        >
+          <Text style={styles.backText}>← #{inc?.id ?? id}</Text>
+        </Pressable>
+        {inc?.estado && (
+          <Badge text={inc.estado === 'EnGestion' ? 'En gestión' : inc.estado} color={theme.status[inc.estado] || theme.colors.muted} />
+        )}
+      </View>
+      <ScrollView
+        style={styles.root}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + theme.spacing.lg }]}
+      >
+        <ErrorBanner message={error} />
+        {error !== '' && (
+          <AppButton title="Reintentar" variant="ghost" onPress={load} />
+        )}
+        {!inc && error === '' && <ActivityIndicator color={theme.colors.primary} />}
+        {!inc && error !== '' && (
+          <EmptyState title="No se pudo cargar el caso" hint="Revisá tu conexión e intentá de nuevo." actionTitle="Reintentar" onAction={load} />
+        )}
+        {inc && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>#{inc.id} · {inc.titulo}</Text>
+            <View style={styles.row}>
+              <Badge text={inc.estado} color={theme.status[inc.estado] || theme.colors.muted} />
+              <Badge text={`Prioridad ${inc.prioridad}`} color={theme.priority[inc.prioridad] || theme.colors.muted} />
+            </View>
+            <Text style={styles.muted}>{TIPO_INCIDENTE[inc.tipo] || inc.tipo} · {fmtFecha(inc.creado_at)}</Text>
+            <Text style={styles.body}>{inc.descripcion}</Text>
           </View>
-          <Text style={styles.muted}>{TIPO_INCIDENTE[inc.tipo] || inc.tipo} · {fmtFecha(inc.creado_at)}</Text>
-          <Text style={styles.body}>{inc.descripcion}</Text>
-        </View>
-      )}
+        )}
       {inc && (
         <View style={styles.card}>
           <Text style={styles.subtitle}>Viajero</Text>
@@ -163,7 +220,15 @@ export function DetalleGestionScreen({ id, onBack }) {
           <Text style={styles.label}>Prioridad</Text>
           <View style={styles.row}>
             {['Baja', 'Alta', 'Critica'].map((p) => (
-              <Pressable key={p} onPress={() => put({ prioridad: p })} disabled={savingPut || inc.prioridad === p} style={[styles.chip, inc.prioridad === p && styles.chipActive]} accessibilityRole="button">
+              <Pressable
+                key={p}
+                onPress={() => put({ prioridad: p })}
+                disabled={savingPut || inc.prioridad === p}
+                style={[styles.chip, inc.prioridad === p && styles.chipActive]}
+                accessibilityRole="button"
+                accessibilityLabel={`Cambiar prioridad a ${p === 'Critica' ? 'Crítica' : p}`}
+                accessibilityState={{ selected: inc.prioridad === p }}
+              >
                 <Text style={[styles.chipText, inc.prioridad === p && styles.chipTextActive]}>{p === 'Critica' ? 'Crítica' : p}</Text>
               </Pressable>
             ))}
@@ -177,6 +242,8 @@ export function DetalleGestionScreen({ id, onBack }) {
                 disabled={savingPut || inc.estado === s}
                 style={[styles.chip, inc.estado === s && styles.chipActive]}
                 accessibilityRole="button"
+                accessibilityLabel={`Cambiar estado a ${s === 'EnGestion' ? 'En gestión' : s}`}
+                accessibilityState={{ selected: inc.estado === s }}
               >
                 <Text style={[styles.chipText, inc.estado === s && styles.chipTextActive]}>{s === 'EnGestion' ? 'En gestión' : s}</Text>
               </Pressable>
@@ -206,30 +273,36 @@ export function DetalleGestionScreen({ id, onBack }) {
           )}
           <Text style={styles.label}>Responder al viajero</Text>
           <TextInput
-            style={styles.area} value={mensaje} onChangeText={(t) => setMensaje(t.slice(0, 2000))}
+            style={styles.area} value={mensaje} onChangeText={(t) => setMensaje(t.slice(0, MAX_RESPUESTA))}
             placeholder="Ej. Hablamos con la aerolínea: reprogramado mañana 08:00." placeholderTextColor={theme.colors.muted}
-            multiline numberOfLines={3} textAlignVertical="top"
+            multiline numberOfLines={3} textAlignVertical="top" maxLength={MAX_RESPUESTA}
           />
+          <Text style={styles.muted}>{mensaje.length}/{MAX_RESPUESTA}</Text>
           <AppButton title="Enviar respuesta" onPress={responder} loading={savingReply} />
           <Text style={styles.subtitle}>Hilo ({hilo.length})</Text>
           {hilo.map((m) => {
             const agente = esDeAgente(m);
             return (
-              <View key={m.id} style={[styles.threadRow, agente ? styles.rowRight : styles.rowLeft]}>
+              <View key={m?.id} style={[styles.threadRow, agente ? styles.rowRight : styles.rowLeft]}>
                 <View style={[styles.bubble, agente ? styles.bubbleAgente : styles.bubbleViajero]}>
-                  <Text style={styles.muted}>{m.autor ?? '—'} · {agente ? 'Agente' : 'Viajero'} · {fmtFecha(m.creado_at)}</Text>
-                  <Text style={styles.body}>{m.mensaje}</Text>
+                  <Text style={styles.muted}>{m?.autor ?? '—'} · {agente ? 'Agente' : 'Viajero'} · {fmtFecha(m?.creado_at)}</Text>
+                  <Text style={styles.body}>{m?.mensaje}</Text>
                 </View>
               </View>
             );
           })}
         </>
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  shell: { flex: 1, backgroundColor: theme.colors.background },
+  sticky: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.sm, backgroundColor: theme.colors.background, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  backBtn: { minHeight: 44, justifyContent: 'center' },
+  backText: { color: theme.colors.primary, fontWeight: 'bold', fontSize: theme.type.subtitle },
   root: { flex: 1, backgroundColor: theme.colors.background },
   content: { padding: theme.spacing.lg, gap: theme.spacing.md },
   card: { backgroundColor: theme.colors.card, borderRadius: theme.radius.lg, padding: theme.spacing.md, gap: 6 },

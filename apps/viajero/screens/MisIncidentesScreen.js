@@ -1,9 +1,9 @@
 // Mis incidentes + detalle con hilo de respuestas (viajero solo ve lo propio).
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
-import { AppButton, Badge, EmptyState, ErrorBanner } from '../../shared/components';
+import { AppButton, Badge, EmptyState, ErrorBanner, LoadingRow } from '../../shared/components';
 import { TIPO_INCIDENTE, fmtFecha } from '../../shared/format';
 
 const FILTROS = [
@@ -34,49 +34,69 @@ export function MisIncidentesScreen({ onOpen, refreshKey, onReportar }) {
   async function onRefresh() { setRefreshing(true); await load(); setRefreshing(false); }
 
   const lista = data ?? [];
-  const abiertos = lista.filter((i) => i.estado === 'Abierto').length;
-  const enGestion = lista.filter((i) => i.estado === 'EnGestion').length;
-  const resueltos = lista.filter((i) => i.estado === 'Resuelto').length;
+  const abiertos = lista.filter((i) => i?.estado === 'Abierto').length;
+  const enGestion = lista.filter((i) => i?.estado === 'EnGestion').length;
+  const resueltos = lista.filter((i) => i?.estado === 'Resuelto').length;
   const conteos = { Todos: lista.length, Abierto: abiertos, EnGestion: enGestion, Resuelto: resueltos };
-  const visible = filtro === 'Todos' ? lista : lista.filter((i) => i.estado === filtro);
+  const visible = filtro === 'Todos' ? lista : lista.filter((i) => i?.estado === filtro);
+  const cargando = data === null && error === '';
+
+  function header() {
+    return (
+      <View style={styles.headerCol}>
+        <Text style={styles.title}>Mis incidentes</Text>
+        <View style={styles.resumen}>
+          <Text style={styles.resumenText}>Abiertos {abiertos} · En gestión {enGestion} · Resueltos {resueltos}</Text>
+        </View>
+        <View style={styles.row}>
+          {FILTROS.map((f) => (
+            <Pressable key={f.key} onPress={() => setFiltro(f.key)} style={[styles.chip, filtro === f.key && styles.chipActive]} accessibilityRole="button" accessibilityLabel={`Filtrar por ${f.label}`} accessibilityState={{ selected: filtro === f.key }}>
+              <Text style={[styles.chipText, filtro === f.key && styles.chipTextActive]}>{f.label} ({conteos[f.key] ?? 0})</Text>
+            </Pressable>
+          ))}
+        </View>
+        <ErrorBanner message={error} />
+        {error !== '' && <Text style={styles.retry} onPress={load}>Toca para reintentar</Text>}
+      </View>
+    );
+  }
+
+  function vacio() {
+    if (cargando) return <LoadingRow text="Cargando incidentes…" />;
+    if (error !== '') return null;
+    if (data !== null && visible.length === 0) {
+      return <EmptyState title="Sin incidentes" hint="Todavía no reportaste problemas. Si algo falla en tu viaje, repórtalo." actionTitle={onReportar ? 'Reportar problema' : undefined} onAction={onReportar ? () => onReportar?.() : undefined} />;
+    }
+    return null;
+  }
+
+  function fila({ item: i }) {
+    return (
+      <Pressable onPress={() => onOpen(i?.id)} style={styles.card} accessibilityRole="button" accessibilityLabel={`Abrir incidente ${i?.id}`}>
+        <Text style={styles.cardTitle}>#{i?.id} · {i?.titulo}</Text>
+        <Text style={styles.muted}>{TIPO_INCIDENTE[i?.tipo] || i?.tipo} · {fmtFecha(i?.creado_at)}</Text>
+        <View style={styles.row}>
+          <Badge text={i?.estado} color={theme.status[i?.estado] || theme.colors.muted} />
+        </View>
+        {i?.ultima_respuesta?.mensaje ? (
+          <Text style={styles.preview} numberOfLines={2}>
+            {i?.ultima_respuesta?.autor ? `${i.ultima_respuesta.autor}: ` : ''}{i?.ultima_respuesta?.mensaje}
+          </Text>
+        ) : null}
+      </Pressable>
+    );
+  }
 
   return (
-    <ScrollView
+    <FlatList
       style={styles.root} contentContainerStyle={styles.content}
+      data={visible}
+      keyExtractor={(i) => String(i?.id)}
+      renderItem={fila}
+      ListHeaderComponent={header()}
+      ListEmptyComponent={vacio()}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.colors.primary]} />}
-    >
-      <Text style={styles.title}>Mis incidentes</Text>
-      <View style={styles.resumen}>
-        <Text style={styles.resumenText}>Abiertos {abiertos} · En gestión {enGestion} · Resueltos {resueltos}</Text>
-      </View>
-      <View style={styles.row}>
-        {FILTROS.map((f) => (
-          <Pressable key={f.key} onPress={() => setFiltro(f.key)} style={[styles.chip, filtro === f.key && styles.chipActive]} accessibilityRole="button">
-            <Text style={[styles.chipText, filtro === f.key && styles.chipTextActive]}>{f.label} ({conteos[f.key] ?? 0})</Text>
-          </Pressable>
-        ))}
-      </View>
-      <ErrorBanner message={error} />
-      {error !== '' && <Text style={styles.retry} onPress={load}>Toca para reintentar</Text>}
-      {data === null && error === '' && <ActivityIndicator color={theme.colors.primary} />}
-      {data !== null && visible.length === 0 && (
-        <EmptyState title="Sin incidentes" hint="Todavía no reportaste problemas. Si algo falla en tu viaje, repórtalo." actionTitle={onReportar ? 'Reportar problema' : undefined} onAction={onReportar ? () => onReportar?.() : undefined} />
-      )}
-      {visible.map((i) => (
-        <Pressable key={i.id} onPress={() => onOpen(i.id)} style={styles.card} accessibilityRole="button">
-          <Text style={styles.cardTitle}>#{i.id} · {i.titulo}</Text>
-          <Text style={styles.muted}>{TIPO_INCIDENTE[i.tipo] || i.tipo} · {fmtFecha(i.creado_at)}</Text>
-          <View style={styles.row}>
-            <Badge text={i.estado} color={theme.status[i.estado] || theme.colors.muted} />
-          </View>
-          {i.ultima_respuesta?.mensaje ? (
-            <Text style={styles.preview} numberOfLines={2}>
-              {i.ultima_respuesta?.autor ? `${i.ultima_respuesta.autor}: ` : ''}{i.ultima_respuesta.mensaje}
-            </Text>
-          ) : null}
-        </Pressable>
-      ))}
-    </ScrollView>
+    />
   );
 }
 
@@ -162,6 +182,7 @@ export function DetalleIncidenteScreen({ id, onBack }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   content: { padding: theme.spacing.lg, gap: theme.spacing.md },
+  headerCol: { gap: theme.spacing.md },
   title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
   subtitle: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text },
   retry: { color: theme.colors.primary, fontWeight: 'bold' },

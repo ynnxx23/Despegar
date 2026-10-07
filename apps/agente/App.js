@@ -14,6 +14,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [detalleId, setDetalleId] = useState(null);
   const [colaKey, setColaKey] = useState(0);
+  const [colaDirty, setColaDirty] = useState(false);
 
   async function logout() {
     try {
@@ -24,6 +25,7 @@ export default function App() {
     clearAuthToken();
     setUser(null);
     setDetalleId(null);
+    setColaDirty(false);
   }
 
   useEffect(() => {
@@ -73,12 +75,20 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <Shell user={user} detalleId={detalleId} colaKey={colaKey} onLogout={logout} onOpen={setDetalleId} onBack={() => { setDetalleId(null); setColaKey((k) => k + 1); }} />
+      <Shell
+        user={user}
+        detalleId={detalleId}
+        colaKey={colaKey}
+        onLogout={logout}
+        onOpen={(id) => { setColaDirty(false); setDetalleId(id); }}
+        onBack={(dirty) => { setDetalleId(null); if (dirty || colaDirty) setColaKey((k) => k + 1); setColaDirty(false); }}
+        onDirty={() => setColaDirty(true)}
+      />
     </SafeAreaProvider>
   );
 }
 
-function Shell({ user, detalleId, colaKey, onLogout, onOpen, onBack }) {
+function Shell({ user, detalleId, colaKey, onLogout, onOpen, onBack, onDirty }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={styles.root}>
@@ -88,7 +98,7 @@ function Shell({ user, detalleId, colaKey, onLogout, onOpen, onBack }) {
       </View>
       <View style={[styles.body, { paddingBottom: insets.bottom }]}>
         {detalleId !== null ? (
-          <DetalleGestionScreen id={detalleId} onBack={onBack} />
+          <DetalleGestionScreen id={detalleId} onBack={(dirty) => onBack?.(dirty)} onChange={() => onDirty?.()} />
         ) : (
           <ColaScreen onOpen={onOpen} refreshKey={colaKey} />
         )}

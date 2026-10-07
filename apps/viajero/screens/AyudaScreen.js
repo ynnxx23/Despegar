@@ -1,7 +1,8 @@
 // Ayuda al viajero: FAQ local en acordeon + contacto de soporte (sin links externos).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
+import { api } from '../../shared/api';
 
 const PREGUNTAS = [
   {
@@ -36,6 +37,13 @@ const PREGUNTAS = [
 
 export function AyudaScreen() {
   const [abierta, setAbierta] = useState(null);
+  const [apiOk, setApiOk] = useState(null);
+
+  useEffect(() => {
+    api.health()
+      .then(() => setApiOk(true))
+      .catch(() => setApiOk(false));
+  }, []);
 
   function toggle(i) {
     setAbierta(abierta === i ? null : i);
@@ -63,6 +71,15 @@ export function AyudaScreen() {
           Escribinos desde la pestaña Reportar y te contestamos en la app, en Mis incidentes. Horario: todos los días de 8 a 22 h.
         </Text>
       </View>
+      <View style={styles.card}>
+        <Text style={styles.pregunta}>Estado del servicio</Text>
+        <View style={styles.estado}>
+          <View style={[styles.punto, apiOk === true && styles.puntoOk, apiOk === false && styles.puntoFail]} />
+          <Text style={styles.respuesta}>
+            {apiOk === null ? 'Consultando estado…' : apiOk ? 'Servicio disponible' : 'Servicio no disponible'}
+          </Text>
+        </View>
+      </View>
     </ScrollView>
   );
 }
@@ -77,4 +94,8 @@ const styles = StyleSheet.create({
   pregunta: { flex: 1, fontSize: theme.type.body, fontWeight: 'bold', color: theme.colors.text },
   signo: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.primary },
   respuesta: { fontSize: theme.type.body, color: theme.colors.text },
+  estado: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
+  punto: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.muted },
+  puntoOk: { backgroundColor: theme.colors.success },
+  puntoFail: { backgroundColor: theme.colors.critical },
 });
