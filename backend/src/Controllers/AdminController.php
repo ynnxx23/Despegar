@@ -1,13 +1,13 @@
 <?php
-// Admin (agente): cola global ordenada por fecha + PUT prioridad/estado + responder.
+// Admin (agente): cola global ordenada + triaje/SLA + responder + gestion de casos.
 class AdminController {
   public static function cola(PDO $db): void {
     $estado = $_GET['estado'] ?? null;
     $prioridad = $_GET['prioridad'] ?? null;
-    $orden = strtolower($_GET['orden'] ?? 'asc');
+    $orden = strtolower($_GET['orden'] ?? 'urgencia');
     if ($estado !== null && !in_array($estado, Incidente::ESTADOS, true)) Response::error('Estado inválido', 400);
     if ($prioridad !== null && !in_array($prioridad, Incidente::PRIORIDADES, true)) Response::error('Prioridad inválida', 400);
-    if (!in_array($orden, ['asc', 'desc'], true)) Response::error('Orden inválido (asc|desc)', 400);
+    if (!in_array($orden, ['asc', 'desc', 'urgencia'], true)) Response::error('Orden inválido (asc|desc|urgencia)', 400);
     $limit = min(max((int)($_GET['limit'] ?? 20), 1), 50);
     $page = max((int)($_GET['page'] ?? 1), 1);
 
@@ -15,6 +15,24 @@ class AdminController {
     $data = $m->listAll($estado, $prioridad, $orden, $limit, ($page - 1) * $limit);
     $data = array_map([Incidente::class, 'toAgent'], $data);
     Response::json(['data' => $data, 'total' => $m->countAll($estado, $prioridad), 'page' => $page, 'limit' => $limit], 200);
+  }
+
+  // Mi cola: asignados a mi o seguidos por mi (no Resueltos salvo ?estado=Resuelto).
+  public static function miCola(PDO $db, array $claims): void {
+    $estado = $_GET['estado'] ?? null;
+    $prioridad = $_GET['prioridad'] ?? null;
+    $orden = strtolower($_GET['orden'] ?? 'urgencia');
+    if ($estado !== null && !in_array($estado, Incidente::ESTADOS, true)) Response::error('Estado inválido', 400);
+    if ($prioridad !== null && !in_array($prioridad, Incidente::PRIORIDADES, true)) Response::error('Prioridad inválida', 400);
+    if (!in_array($orden, ['asc', 'desc', 'urgencia'], true)) Response::error('Orden inválido (asc|desc|urgencia)', 400);
+    $limit = min(max((int)($_GET['limit'] ?? 20), 1), 50);
+    $page = max((int)($_GET['page'] ?? 1), 1);
+    $yo = (int)($claims['sub'] ?? 0);
+
+    $m = new Incidente($db);
+    $data = $m->miCola($yo, $estado, $prioridad, $orden, $limit, ($page - 1) * $limit);
+    $data = array_map([Incidente::class, 'toAgent'], $data);
+    Response::json(['data' => $data, 'total' => $m->countMiCola($yo, $estado, $prioridad), 'page' => $page, 'limit' => $limit], 200);
   }
 
   public static function ver(PDO $db, int $id): void {
@@ -52,8 +70,22 @@ class AdminController {
     if ($estado === 'Resuelto' && $efectiva === null) {
       Response::error('Prioridad requerida antes de resolver', 400);
     }
+    $actor = (int)($claims['sub'] ?? 0) ?: null;
     $m->update($id, $prioridad, $estado, (int)($claims['sub'] ?? 0) ?: null);
-    // TODO: registrar en incidente_historial (incidente_id, actor_id, cambio, creado_at) cuando exista la tabla.
+    // Eventos: prioridad/triaje y estado/resuelto/reabierto.
+    if ($prioridad !== null && $prioridad !== ($actual['prioridad'] ?? null)) {
+      $m->registrarEvento($id, $actor, 'prioridad', $prioridad);
+      $m->registrarEvento($id, $actor, 'triaje', $prioridad);
+    }
+    if ($estado !== null && $estado !== ($actual['estado'] ?? null)) {
+      if ($estado === 'Resuelto') {
+        $m->registrarEvento($id, $actor, 'resuelto', $estado);
+      } elseif (($actual['estado'] ?? null) === 'Resuelto') {
+        $m->registrarEvento($id, $actor, 'reabierto', $estado);
+      } else {
+        $m->registrarEvento($id, $actor, 'estado', $estado);
+      }
+    }
     Response::json(['data' => Incidente::toAgent($m->findById($id))], 200);
   }
 
@@ -71,12 +103,27 @@ class AdminController {
       Response::error('Error interno del servidor', 500);
     }
     if ($rid === false) Response::error('Incidente no encontrado', 404);
+    $m->registrarEvento($id, (int)($claims['sub'] ?? 0) ?: null, 'responder', null);
     Response::json(['data' => ['id' => $rid, 'incidente_id' => $id, 'mensaje' => $mensaje]], 201);
   }
 
-  public static function resumen(PDO $db): void {
+  public static function resumen(PDO $db, array $claims): void {
     $rows = $db->query('SELECT * FROM resumen_cola()')->fetchAll();
-    Response::json(['data' => $rows], 200);
+    $sinTriar = (int)$db->query("SELECT COUNT(*) FROM incidentes WHERE prioridad IS NULL")->fetchColumn();
+    $vencidos = 0;
+    $mios = 0;
+    try {
+      $vencidos = (int)$db->query(
+        "SELECT COUNT(*) FROM incidentes WHERE sla_vence_at IS NOT NULL AND sla_vence_at < NOW() AND estado <> 'Resuelto'"
+      )->fetchColumn();
+    } catch (Throwable $e) { $vencidos = 0; }
+    try {
+      $yo = (int)($claims['sub'] ?? 0);
+      $st = $db->prepare("SELECT COUNT(*) FROM incidentes WHERE asignado_a = ? AND estado <> 'Resuelto'");
+      $st->execute([$yo]);
+      $mios = (int)$st->fetchColumn();
+    } catch (Throwable $e) { $mios = 0; }
+    Response::json(['data' => $rows, 'sin_triar' => $sinTriar, 'vencidos' => $vencidos, 'mios' => $mios], 200);
   }
 
   public static function respuestas(PDO $db, int $id): void {
@@ -84,5 +131,101 @@ class AdminController {
     if (!$m->findById($id)) Response::error('Incidente no encontrado', 404);
     $r = new Respuesta($db);
     Response::json(['data' => $r->listByIncidente($id)], 200);
+  }
+
+  // Toma el caso: asigna al actor (+ pasa a EnGestion si estaba Abierto).
+  public static function claim(PDO $db, array $claims, int $id): void {
+    $m = new Incidente($db);
+    $inc = $m->findById($id);
+    if (!$inc) Response::error('Incidente no encontrado', 404);
+    $yo = (int)($claims['sub'] ?? 0);
+    $asignado = $inc['asignado_a'] ?? null;
+    if ($asignado !== null && (int)$asignado !== $yo) {
+      Response::error('Caso ya asignado a otro agente', 409);
+    }
+    if ($asignado !== null && (int)$asignado === $yo) {
+      Response::json(['data' => Incidente::toAgent($inc)], 200);
+    }
+    $st = $db->prepare('UPDATE incidentes SET asignado_a = ? WHERE id = ?');
+    $st->execute([$yo, $id]);
+    if (($inc['estado'] ?? null) === 'Abierto') {
+      $st = $db->prepare("UPDATE incidentes SET estado = 'EnGestion' WHERE id = ?");
+      $st->execute([$id]);
+    }
+    $m->registrarEvento($id, $yo ?: null, 'claim', null);
+    Response::json(['data' => Incidente::toAgent($m->findById($id))], 200);
+  }
+
+  // Libera el caso: asignado_a = NULL.
+  public static function release(PDO $db, array $claims, int $id): void {
+    $m = new Incidente($db);
+    $inc = $m->findById($id);
+    if (!$inc) Response::error('Incidente no encontrado', 404);
+    $st = $db->prepare('UPDATE incidentes SET asignado_a = NULL WHERE id = ?');
+    $st->execute([$id]);
+    $m->registrarEvento($id, (int)($claims['sub'] ?? 0) ?: null, 'release', null);
+    Response::json(['data' => Incidente::toAgent($m->findById($id))], 200);
+  }
+
+  // Deriva a otro agente (rol agente) con motivo opcional.
+  public static function derivar(PDO $db, array $claims, int $id, array $body): void {
+    $m = new Incidente($db);
+    $inc = $m->findById($id);
+    if (!$inc) Response::error('Incidente no encontrado', 404);
+    $destino = $body['agente_id'] ?? null;
+    $destino = filter_var($destino, FILTER_VALIDATE_INT);
+    if ($destino === false || $destino <= 0) Response::error('agente_id inválido', 400);
+    $st = $db->prepare('SELECT id, rol FROM usuarios WHERE id = ? LIMIT 1');
+    $st->execute([$destino]);
+    $u = $st->fetch();
+    if (!$u || ($u['rol'] ?? '') !== 'agente') Response::error('Agente no encontrado', 404);
+    $actual = $inc['asignado_a'] ?? null;
+    if ($actual !== null && (int)$actual === (int)$destino) {
+      Response::error('El caso ya está asignado a ese agente', 400);
+    }
+    $motivo = isset($body['motivo']) ? trim((string)$body['motivo']) : null;
+    if ($motivo === '') $motivo = null;
+    $st = $db->prepare('UPDATE incidentes SET asignado_a = ? WHERE id = ?');
+    $st->execute([(int)$destino, $id]);
+    $m->registrarEvento($id, (int)($claims['sub'] ?? 0) ?: null, 'derivar', $motivo);
+    Response::json(['data' => Incidente::toAgent($m->findById($id))], 200);
+  }
+
+  // Seguir el caso (idempotente).
+  public static function seguir(PDO $db, array $claims, int $id): void {
+    $m = new Incidente($db);
+    if (!$m->findById($id)) Response::error('Incidente no encontrado', 404);
+    $yo = (int)($claims['sub'] ?? 0);
+    $st = $db->prepare('INSERT INTO incidente_seguidores (incidente_id, agente_id) VALUES (?, ?) ON CONFLICT DO NOTHING');
+    $st->execute([$id, $yo]);
+    $m->registrarEvento($id, $yo ?: null, 'seguir', null);
+    Response::json(['data' => ['incidente_id' => $id, 'siguiendo' => true]], 200);
+  }
+
+  // Dejar de seguir (idempotente).
+  public static function dejarSeguir(PDO $db, array $claims, int $id): void {
+    $m = new Incidente($db);
+    if (!$m->findById($id)) Response::error('Incidente no encontrado', 404);
+    $yo = (int)($claims['sub'] ?? 0);
+    $st = $db->prepare('DELETE FROM incidente_seguidores WHERE incidente_id = ? AND agente_id = ?');
+    $st->execute([$id, $yo]);
+    $m->registrarEvento($id, $yo ?: null, 'dejar_seguir', null);
+    Response::json(['data' => ['incidente_id' => $id, 'siguiendo' => false]], 200);
+  }
+
+  // Historial interno con actor_nombre (para agente).
+  public static function historial(PDO $db, int $id): void {
+    $m = new Incidente($db);
+    if (!$m->findById($id)) Response::error('Incidente no encontrado', 404);
+    Response::json(['data' => $m->historial($id)], 200);
+  }
+
+  // Lista de agentes (id, nombre, email).
+  public static function agentes(PDO $db): void {
+    $rows = $db->query("SELECT id, nombre, email FROM usuarios WHERE rol = 'agente' ORDER BY nombre ASC")->fetchAll();
+    $rows = array_map(function (array $r): array {
+      return ['id' => (int)$r['id'], 'nombre' => $r['nombre'], 'email' => $r['email']];
+    }, $rows);
+    Response::json(['data' => $rows], 200);
   }
 }

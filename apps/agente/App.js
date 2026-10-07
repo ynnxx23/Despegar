@@ -100,7 +100,7 @@ function Shell({ user, detalleId, colaKey, onLogout, onOpen, onBack, onDirty }) 
         {detalleId !== null ? (
           <DetalleGestionScreen id={detalleId} onBack={(dirty) => onBack?.(dirty)} onChange={() => onDirty?.()} />
         ) : (
-          <ColaScreen onOpen={onOpen} refreshKey={colaKey} />
+          <ColaScreen user={user} onOpen={onOpen} refreshKey={colaKey} />
         )}
       </View>
     </View>

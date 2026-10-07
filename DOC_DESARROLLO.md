@@ -129,7 +129,7 @@ incidentes 1:N respuestas. Índices: `idx_reservas_user`, `idx_incidentes_user`,
 | `sembrar_demo()` | PROCEDURE | Seed idempotente (agente+2 viajeros+reservas+incidente); `seeds.sql` = `CALL` |
 
 Credenciales demo (solo desarrollo): `agente@despegar.com`/`Agente123`,
-`ana@test.com`/`Viaje1234`, `bruno@test.com`/`Viaje5678` (hashes bcrypt en BD).
+`maria@despegar.com`/`Agente456`, `ana@test.com`/`Viaje1234`, `bruno@test.com`/`Viaje5678` (hashes bcrypt en BD).
 
 ## 7. Autenticación y seguridad
 

@@ -12,7 +12,7 @@ Documentación: `DOC_PROYECTO.md` (general) y `DOC_DESARROLLO.md` (especificacio
 ## Dev rápido (PostgreSQL local)
 Requisito PHP: extensión `pdo_pgsql` activa (`extension=pdo_pgsql` en `php.ini`).
 1. Crear rol/BD una vez: `createdb -U postgres -O despegar despegar` (pass rol: `despegar_dev`).
-2. Aplicar: `psql -U despegar -d despegar -f db/schema.sql -f db/seeds.sql`.
+2. Aplicar: `psql -U despegar -d despegar -f db/schema.sql -f db/seeds.sql -f db/migrate_02_prioridad_nullable.sql -f db/migrate_03_gestion_casos.sql`.
 3. Copiar `backend/.env.example` a `backend/.env` y ajustar.
 4. `php -S localhost:8000 -t backend/public` → `GET http://localhost:8000/api/health`.
 
@@ -25,12 +25,15 @@ Opción B con Docker (opcional): `docker compose up --build` → API `:8000`, Po
 | POST | `/login` | público | JWT HS256 8h |
 | GET | `/me` | auth | Sesión actual |
 | GET | `/itinerario` | viajero | Sus reservas |
-| GET/POST | `/incidentes/mios`, `/incidentes` | viajero | Listar propios / crear (tipo, título 5-120, desc 10-2000) |
-| GET | `/incidentes/:id`(+`/respuestas`) | dueño o agente | Detalle e hilo |
-| GET | `/admin/incidentes?estado=&prioridad=&orden=asc\|desc&page=&limit=` | agente | Cola FIFO + filtros |
-| GET | `/admin/incidentes/resumen` | agente | Conteos `resumen_cola()` |
-| GET/PUT | `/admin/incidentes/:id` | agente | Ver / prioridad+estado |
+| GET/POST | `/incidentes/mios`, `/incidentes` | viajero | Listar propios / crear (7 tipos, sugerencia auto, sin prioridad real) |
+| GET | `/incidentes/:id`(+`/respuestas`) | dueño o agente | Detalle (+`atendido_por`, historial público) e hilo |
+| GET | `/admin/incidentes?estado=&prioridad=&orden=asc\|desc\|urgencia&page=&limit=` | agente | Cola urgencia (vencidos SLA, sin triar, Critica/Alta/Baja) + filtros |
+| GET | `/admin/incidentes/resumen` | agente | Conteos `resumen_cola()` + `sin_triar,vencidos,mios` |
+| GET/PUT | `/admin/incidentes/:id` | agente | Ver / triaje prioridad+SLA+estado (Resuelto exige prioridad) |
 | GET/POST | `/admin/incidentes/:id/respuestas` | agente | Hilo / responder (atómico vía `crear_respuesta()`) |
+| POST | `/admin/incidentes/:id/claim`, `/release`, `/derivar`, `/seguir` | agente | Tomar / liberar / derivar `{agente_id,motivo?}` / seguir |
+| DELETE | `/admin/incidentes/:id/seguir` | agente | Dejar de seguir |
+| GET | `/admin/incidentes/:id/historial`, `/admin/agentes`, `/admin/mi-cola` | agente | Eventos con actor / agentes / mi cola (asignados+seguidos) |
 
 Errores: 400 validación, 401 sin token/inválido/expirado, 403 rol insuficiente o recurso ajeno, 404 inexistente, 409 email duplicado.
 
@@ -38,7 +41,8 @@ Errores: 400 validación, 401 sin token/inválido/expirado, 403 rol insuficiente
 Requieren API en `:8000`:
 `powershell -ExecutionPolicy Bypass -File tests/api_f2_auth.ps1` (auth/roles/SQLi) ·
 `tests/api_f3_dominio.ps1` (itinerario/incidentes/cola/403) ·
-`tests/api_f7_integracion.ps1` (JWT expirado→401 + loop viajero→agente→viajero).
+`tests/api_f7_integracion.ps1` (JWT expirado→401 + loop viajero→agente→viajero) ·
+`tests/api_f8_gestion.ps1` (sugerencia/SLA/claim/derivar/seguir/historial).
 
 ## Apps (manual, F5/F6)
 `cd apps/viajero && npm install && npx expo start` (idem `apps/agente`), apuntando a `http://<tu-IP>:8000/api` (editar `BASE_URL` en `apps/shared/api.js`; localhost no sirve desde el celular).

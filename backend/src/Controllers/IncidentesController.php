@@ -1,5 +1,5 @@
 <?php
-// Incidentes del viajero: ver míos, crear, ver uno propio, leer respuestas propias.
+// Incidentes del viajero: ver mios, crear, ver uno propio, leer respuestas propias.
 class IncidentesController {
   public static function mios(PDO $db, array $claims): void {
     $estado = $_GET['estado'] ?? null;
@@ -35,8 +35,10 @@ class IncidentesController {
 
     $m = new Incidente($db);
     $id = $m->create((int)$claims['sub'], $rid, $tipo, $titulo, $descripcion);
-    // Contrato: el viajero nunca ve prioridad (se ignora si el cliente la envia).
-    Response::json(['data' => Incidente::toPublic($m->findById($id))], 201);
+    $m->registrarEvento($id, (int)($claims['sub'] ?? 0) ?: null, 'creado', null);
+    // Contrato: el viajero nunca ve prioridad real (se ignora si el cliente la envia).
+    $row = Incidente::toPublic($m->findById($id));
+    Response::json(['data' => $row], 201);
   }
 
   private static function propio(PDO $db, array $claims, int $id): array {
@@ -47,8 +49,22 @@ class IncidentesController {
     return $inc;
   }
 
+  // Detalle viajero: incidente (sin prioridad) + atendido_por + historial publico.
   public static function ver(PDO $db, array $claims, int $id): void {
-    Response::json(['data' => Incidente::toPublic(self::propio($db, $claims, $id))], 200);
+    $inc = self::propio($db, $claims, $id);
+    $m = new Incidente($db);
+    $data = Incidente::toPublic($inc);
+    try {
+      $data['atendido_por'] = $m->asignadoNombre($id);
+    } catch (Throwable $e) {
+      $data['atendido_por'] = null;
+    }
+    try {
+      $data['historial'] = $m->historialPublico($id);
+    } catch (Throwable $e) {
+      $data['historial'] = [];
+    }
+    Response::json(['data' => $data], 200);
   }
 
   public static function respuestas(PDO $db, array $claims, int $id): void {

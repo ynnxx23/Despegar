@@ -6,6 +6,20 @@ import { api } from '../../shared/api';
 import { AppButton, Badge, EmptyState, ErrorBanner, LoadingRow } from '../../shared/components';
 import { TIPO_INCIDENTE, fmtFecha } from '../../shared/format';
 
+const TIPOS_FALLBACK = {
+  Vuelo_cancelado: 'Vuelo cancelado',
+  Vuelo_retrasado: 'Vuelo retrasado',
+  Hotel_sin_reserva: 'Hotel sin reserva',
+  Equipaje: 'Equipaje perdido o dañado',
+  Cobro_indebido: 'Cobro indebido',
+  Fraude: 'Fraude o estafa',
+  Otro: 'Otro',
+};
+
+function labelTipo(t) {
+  return TIPO_INCIDENTE?.[t] ?? TIPOS_FALLBACK?.[t] ?? t;
+}
+
 const FILTROS = [
   { key: 'Todos', label: 'Todos' },
   { key: 'Abierto', label: 'Abiertos' },
@@ -71,12 +85,14 @@ export function MisIncidentesScreen({ onOpen, refreshKey, onReportar }) {
   }
 
   function fila({ item: i }) {
+    const atiende = i?.atendido_por ?? null;
     return (
       <Pressable onPress={() => onOpen(i?.id)} style={styles.card} accessibilityRole="button" accessibilityLabel={`Abrir incidente ${i?.id}`}>
         <Text style={styles.cardTitle}>#{i?.id} · {i?.titulo}</Text>
-        <Text style={styles.muted}>{TIPO_INCIDENTE[i?.tipo] || i?.tipo} · {fmtFecha(i?.creado_at)}</Text>
+        <Text style={styles.muted}>{labelTipo(i?.tipo)} · {fmtFecha(i?.creado_at)}</Text>
+        {atiende ? <Text style={styles.atiende}>Atiende: {atiende}</Text> : null}
         <View style={styles.row}>
-          <Badge text={i?.estado} color={theme.status[i?.estado] || theme.colors.muted} />
+          <Badge text={i?.estado} color={theme.status?.[i?.estado] || theme.colors.muted} />
         </View>
         {i?.ultima_respuesta?.mensaje ? (
           <Text style={styles.preview} numberOfLines={2}>
@@ -116,10 +132,10 @@ export function DetalleIncidenteScreen({ id, onBack }) {
     setError('');
     try {
       const [a, b] = await Promise.all([api.get(`/incidentes/${id}`), api.get(`/incidentes/${id}/respuestas`)]);
-      setInc(a.data);
-      setHilo(b.data);
+      setInc(a?.data ?? null);
+      setHilo(b?.data ?? []);
     } catch (e) {
-      setError(e.message);
+      setError(e?.message ?? 'No pudimos cargar el detalle.');
     }
   }, [id]);
 
@@ -128,6 +144,8 @@ export function DetalleIncidenteScreen({ id, onBack }) {
   async function onRefresh() { setRefreshing(true); await load(); setRefreshing(false); }
 
   const idxActual = Math.max(0, PASOS.findIndex((p) => p.key === inc?.estado));
+  const atendidoPor = inc?.atendido_por ?? null;
+  const historial = inc?.historial ?? [];
 
   return (
     <ScrollView
@@ -140,12 +158,23 @@ export function DetalleIncidenteScreen({ id, onBack }) {
       {!inc && error === '' && <ActivityIndicator color={theme.colors.primary} />}
       {inc && (
         <View style={styles.card}>
-          <Text selectable style={styles.cardTitle}>Reporte #{inc.id} · {inc.titulo}</Text>
+          <Text selectable style={styles.cardTitle}>Reporte #{inc?.id} · {inc?.titulo}</Text>
           <View style={styles.row}>
-            <Badge text={inc.estado} color={theme.status[inc.estado] || theme.colors.muted} />
+            <Badge text={inc?.estado} color={theme.status?.[inc?.estado] || theme.colors.muted} />
           </View>
-          <Text style={styles.muted}>{TIPO_INCIDENTE[inc.tipo] || inc.tipo} · {fmtFecha(inc.creado_at)}</Text>
-          <Text style={styles.body}>{inc.descripcion}</Text>
+          <Text style={styles.muted}>{labelTipo(inc?.tipo)} · {fmtFecha(inc?.creado_at)}</Text>
+          <Text style={styles.body}>{inc?.descripcion}</Text>
+          <View style={styles.caso}>
+            <Text style={styles.casoTitulo}>Tu caso</Text>
+            {atendidoPor ? (
+              <>
+                <Text style={styles.casoNombre}>Lo atiende {atendidoPor}</Text>
+                <Text style={styles.muted}>Te avisaremos cada novedad</Text>
+              </>
+            ) : (
+              <Text style={styles.muted}>En revisión por el equipo</Text>
+            )}
+          </View>
           <View style={styles.timeline}>
             {PASOS.map((p, i) => {
               const activo = i === idxActual;
@@ -164,14 +193,32 @@ export function DetalleIncidenteScreen({ id, onBack }) {
           </View>
         </View>
       )}
-      {inc && <Text style={styles.subtitle}>Respuestas de soporte ({hilo.length})</Text>}
-      {inc && hilo.length === 0 && <Text style={styles.muted}>Aún sin respuestas. Te avisaremos aquí cuando el agente conteste.</Text>}
-      {hilo.map((m) => {
-        const esAgente = m.autor_rol ? m.autor_rol === 'agente' : false;
+      {inc && (
+        <View style={styles.card}>
+          <Text style={styles.subtitle}>Novedades ({historial?.length ?? 0})</Text>
+          {(historial?.length ?? 0) === 0 ? (
+            <Text style={styles.muted}>Sin novedades aún</Text>
+          ) : (
+            historial?.map((h, idx) => (
+              <View key={`${h?.creado_at ?? idx}-${idx}`} style={styles.novedad}>
+                <View style={styles.novedadPunto} />
+                <View style={styles.novedadCol}>
+                  <Text style={styles.body}>{h?.texto ?? '—'}</Text>
+                  <Text style={styles.muted}>{fmtFecha(h?.creado_at)}</Text>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+      )}
+      {inc && <Text style={styles.subtitle}>Respuestas de soporte ({hilo?.length ?? 0})</Text>}
+      {inc && (hilo?.length ?? 0) === 0 && <Text style={styles.muted}>Aún sin respuestas. Te avisaremos aquí cuando el agente conteste.</Text>}
+      {(hilo ?? [])?.map((m) => {
+        const esAgente = m?.autor_rol ? m.autor_rol === 'agente' : false;
         return (
-          <View key={m.id} style={[styles.reply, esAgente ? styles.replyAgente : styles.replyViajero]}>
-            <Text style={styles.muted}>{m.autor || (esAgente ? 'Soporte' : 'Vos')} · {fmtFecha(m.creado_at)}</Text>
-            <Text style={styles.body}>{m.mensaje}</Text>
+          <View key={m?.id} style={[styles.reply, esAgente ? styles.replyAgente : styles.replyViajero]}>
+            <Text style={styles.muted}>{m?.autor || (esAgente ? 'Soporte' : 'Vos')} · {fmtFecha(m?.creado_at)}</Text>
+            <Text style={styles.body}>{m?.mensaje}</Text>
           </View>
         );
       })}
@@ -211,4 +258,11 @@ const styles = StyleSheet.create({
   pasoTexto: { fontSize: theme.type.caption, color: theme.colors.muted, textAlign: 'center' },
   pasoActivo: { color: theme.colors.text, fontWeight: 'bold' },
   pasoFecha: { fontSize: 12, color: theme.colors.muted, textAlign: 'center' },
+  atiende: { fontSize: theme.type.caption, fontWeight: 'bold', color: theme.colors.primary },
+  caso: { backgroundColor: theme.colors.background, borderRadius: theme.radius.md, padding: theme.spacing.sm, gap: 2, borderWidth: 1, borderColor: theme.colors.border },
+  casoTitulo: { fontSize: theme.type.caption, fontWeight: 'bold', color: theme.colors.muted },
+  casoNombre: { fontSize: theme.type.body, fontWeight: 'bold', color: theme.colors.text },
+  novedad: { flexDirection: 'row', gap: theme.spacing.sm, alignItems: 'flex-start' },
+  novedadPunto: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.primary, marginTop: 5 },
+  novedadCol: { flex: 1, gap: 2 },
 });
