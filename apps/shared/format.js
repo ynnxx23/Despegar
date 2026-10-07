@@ -2,8 +2,11 @@
 export const TIPO_RESERVA = { vuelo: 'Vuelo', hotel: 'Hotel' };
 export const TIPO_INCIDENTE = {
   Vuelo_cancelado: 'Vuelo cancelado',
+  Vuelo_retrasado: 'Vuelo retrasado',
   Hotel_sin_reserva: 'Hotel sin reserva',
-  Fraude: 'Fraude',
+  Equipaje: 'Equipaje perdido o dañado',
+  Cobro_indebido: 'Cobro indebido',
+  Fraude: 'Fraude o estafa',
   Otro: 'Otro',
 };
 export function fmtFecha(iso) {

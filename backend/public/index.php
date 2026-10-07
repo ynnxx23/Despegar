@@ -24,7 +24,7 @@ if (strlen(Config::get('JWT_SECRET', '')) < 32) {
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
-header('Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -102,14 +102,61 @@ if (preg_match('#^/api/incidentes/(\d+)/respuestas$#', $path, $mch)) {
 }
 
 // --- Admin agente (RF-07/08/09, control RF-10: viajero recibe 403) ---
+if ($method === 'GET' && $path === '/api/admin/agentes') {
+  Auth::requireRole(['agente']);
+  AdminController::agentes($db);
+}
+
+if ($method === 'GET' && $path === '/api/admin/mi-cola') {
+  $claims = Auth::requireRole(['agente']);
+  AdminController::miCola($db, $claims);
+}
+
 if ($method === 'GET' && $path === '/api/admin/incidentes') {
   Auth::requireRole(['agente']);
   AdminController::cola($db);
 }
 
 if ($method === 'GET' && $path === '/api/admin/incidentes/resumen') {
+  $claims = Auth::requireRole(['agente']);
+  AdminController::resumen($db, $claims);
+}
+
+if (preg_match('#^/api/admin/incidentes/(\d+)/historial$#', $path, $mch)) {
   Auth::requireRole(['agente']);
-  AdminController::resumen($db);
+  if ($method === 'GET') {
+    AdminController::historial($db, (int)$mch[1]);
+  }
+}
+
+if (preg_match('#^/api/admin/incidentes/(\d+)/claim$#', $path, $mch)) {
+  $claims = Auth::requireRole(['agente']);
+  if ($method === 'POST') {
+    AdminController::claim($db, $claims, (int)$mch[1]);
+  }
+}
+
+if (preg_match('#^/api/admin/incidentes/(\d+)/release$#', $path, $mch)) {
+  $claims = Auth::requireRole(['agente']);
+  if ($method === 'POST') {
+    AdminController::release($db, $claims, (int)$mch[1]);
+  }
+}
+
+if (preg_match('#^/api/admin/incidentes/(\d+)/derivar$#', $path, $mch)) {
+  $claims = Auth::requireRole(['agente']);
+  if ($method === 'POST') {
+    AdminController::derivar($db, $claims, (int)$mch[1], bodyJson());
+  }
+}
+
+if (preg_match('#^/api/admin/incidentes/(\d+)/seguir$#', $path, $mch)) {
+  $claims = Auth::requireRole(['agente']);
+  if ($method === 'POST') {
+    AdminController::seguir($db, $claims, (int)$mch[1]);
+  } elseif ($method === 'DELETE') {
+    AdminController::dejarSeguir($db, $claims, (int)$mch[1]);
+  }
 }
 
 if (preg_match('#^/api/admin/incidentes/(\d+)/respuestas$#', $path, $mch)) {

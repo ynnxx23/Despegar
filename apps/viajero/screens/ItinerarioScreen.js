@@ -25,7 +25,7 @@ function textoCuenta(reserva) {
 }
 
 function rutaReserva(r) {
-  return r.tipo === 'vuelo' ? `${r.origen || '?'} → ${r.destino || '?'}` : r.hotel || 'Hotel';
+  return r?.tipo === 'vuelo' ? `${r?.origen || '?'} → ${r?.destino || '?'}` : r?.hotel || 'Hotel';
 }
 
 export function ItinerarioScreen({ onReportar }) {
@@ -52,8 +52,8 @@ export function ItinerarioScreen({ onReportar }) {
   }
 
   const lista = data ?? [];
-  const vuelos = lista.filter((r) => r.tipo === 'vuelo').length;
-  const hoteles = lista.filter((r) => r.tipo === 'hotel').length;
+  const vuelos = lista.filter((r) => r?.tipo === 'vuelo').length;
+  const hoteles = lista.filter((r) => r?.tipo === 'hotel').length;
   const hoy = inicioDia(new Date());
   const futuras = lista
     .filter((r) => r?.fecha_inicio && inicioDia(r.fecha_inicio) >= hoy)
@@ -70,10 +70,10 @@ export function ItinerarioScreen({ onReportar }) {
     return (
       <View style={destacada ? styles.destacada : styles.card}>
         {destacada && <Text style={styles.sello}>PRÓXIMO VIAJE · {textoCuenta(r)}</Text>}
-        <Text style={destacada ? styles.codigoGrande : styles.cardTitle}>{TIPO_RESERVA[r?.tipo] || r?.tipo} · {r?.codigo}</Text>
+        <Text style={destacada ? styles.codigoGrande : styles.cardTitle}>{TIPO_RESERVA?.[r?.tipo] ?? r?.tipo} · {r?.codigo}</Text>
         <Text style={styles.body}>{rutaReserva(r)}</Text>
-        <Text style={styles.muted}>{fmtFecha(r?.fecha_inicio)}{r?.fecha_fin ? ` — ${fmtFecha(r.fecha_fin)}` : ''}{!destacada ? ` · ${textoCuenta(r)}` : ''}</Text>
-        <Badge text={r?.estado} color={theme.status[r?.estado] || theme.colors.muted} />
+        <Text style={styles.muted}>{fmtFecha(r?.fecha_inicio)}{r?.fecha_fin ? ` — ${fmtFecha(r?.fecha_fin)}` : ''}{!destacada ? ` · ${textoCuenta(r)}` : ''}</Text>
+        <Badge text={r?.estado} color={theme.status?.[r?.estado] || theme.colors.muted} />
         <AppButton title="Reportar sobre esta reserva" onPress={() => onReportar?.(r?.id)} variant="ghost" />
       </View>
     );

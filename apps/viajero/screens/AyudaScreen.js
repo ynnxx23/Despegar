@@ -33,6 +33,38 @@ const PREGUNTAS = [
     q: '¿Puedo reportar sin tener una reserva?',
     a: 'Sí. Elegí la opción Sin reserva y contanos qué pasó. Igual te conviene asociar la reserva si la tenés para que el agente ubique tu caso más rápido.',
   },
+  {
+    q: 'Vuelo cancelado, ¿qué datos incluyo?',
+    a: 'Indicá N° de vuelo y aeropuerto. Si tenés, sumá código de reserva y qué te ofreció la aerolínea.',
+  },
+  {
+    q: 'Vuelo retrasado, ¿qué datos incluyo?',
+    a: 'Indicá N° de vuelo y horas de demora. Sumá aeropuerto y código de reserva si lo tenés.',
+  },
+  {
+    q: 'Hotel sin reserva, ¿qué datos incluyo?',
+    a: 'Indicá hotel, ciudad y fecha de check-in. Agregá código de reserva y comprobante si tenés.',
+  },
+  {
+    q: 'Equipaje perdido o dañado, ¿qué hago?',
+    a: 'Describí valija + N° de reclamo aerolínea si tenés. Contá dónde la viste por última vez y qué tenía adentro.',
+  },
+  {
+    q: 'Cobro indebido, ¿qué informo?',
+    a: 'Indicá monto, fecha y últimos 4 dígitos (nunca el número completo). Adjuntá contexto del cargo si podés.',
+  },
+  {
+    q: 'Fraude o estafa, ¿cómo lo reporto?',
+    a: 'Describí qué pasó sin incluir claves ni CBU completos. Contá fecha, monto y por qué canal te contactaron.',
+  },
+  {
+    q: '¿Cuánto tardan en responder por tipo?',
+    a: 'Fraude: mismo día, resto: 24-72 h. Si tu vuelo sale en pocas horas, aclaralo en el título para que te ubiquemos antes.',
+  },
+  {
+    q: '¿Quién atiende mi caso?',
+    a: 'Cuando reportás, tu caso entra en cola y se lo asignamos a un agente de soporte. Ves su nombre en Mis incidentes y en el detalle como "Lo atiende". Te avisamos cada novedad ahí mismo.',
+  },
 ];
 
 export function AyudaScreen() {
@@ -65,6 +97,12 @@ export function AyudaScreen() {
           </View>
         );
       })}
+      <View style={styles.card}>
+        <Text style={styles.pregunta}>Quién atiende mi caso</Text>
+        <Text style={styles.respuesta}>
+          Tu reporte lo toma un agente del equipo de soporte. Ni bien se asigna, ves "Lo atiende" con su nombre en tu incidente. Si aún no tiene agente, ves "En revisión por el equipo". Todo aviso llega al detalle de tu caso, no hace falta llamar.
+        </Text>
+      </View>
       <View style={styles.card}>
         <Text style={styles.pregunta}>Contacto de soporte</Text>
         <Text style={styles.respuesta}>

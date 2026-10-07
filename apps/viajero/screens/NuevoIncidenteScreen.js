@@ -7,18 +7,37 @@ import { api } from '../../shared/api';
 import { AppButton, ErrorBanner } from '../../shared/components';
 import { TIPO_INCIDENTE, fmtFecha } from '../../shared/format';
 
-const TIPOS = Object.keys(TIPO_INCIDENTE);
+const TIPOS_FALLBACK = {
+  Vuelo_cancelado: 'Vuelo cancelado',
+  Vuelo_retrasado: 'Vuelo retrasado',
+  Hotel_sin_reserva: 'Hotel sin reserva',
+  Equipaje: 'Equipaje perdido o dañado',
+  Cobro_indebido: 'Cobro indebido',
+  Fraude: 'Fraude o estafa',
+  Otro: 'Otro',
+};
+
+const ORDEN_TIPOS = ['Vuelo_cancelado', 'Vuelo_retrasado', 'Hotel_sin_reserva', 'Equipaje', 'Cobro_indebido', 'Fraude', 'Otro'];
+
+function labelTipo(t) {
+  return TIPO_INCIDENTE?.[t] ?? TIPOS_FALLBACK?.[t] ?? t;
+}
+
+const TIPOS = ORDEN_TIPOS;
 
 const AYUDA_TIPO = {
-  Vuelo_cancelado: 'Incluí código de reserva, número de vuelo, fecha y qué te ofreció la aerolínea.',
-  Hotel_sin_reserva: 'Incluí código de reserva, hotel, fecha de check-in y comprobante si tenés.',
-  Fraude: 'Incluí fecha del cargo, monto y cualquier comprobante que tengas a mano.',
-  Otro: 'Contanos fecha, lugar y todo dato que ayude a ubicar tu reserva.',
+  Vuelo_cancelado: 'Indicá N° de vuelo y aeropuerto',
+  Vuelo_retrasado: 'Indicá N° de vuelo y horas de demora',
+  Hotel_sin_reserva: 'Indicá hotel, ciudad y fecha de check-in',
+  Equipaje: 'Describí valija + N° de reclamo aerolínea si tenés',
+  Cobro_indebido: 'Indicá monto, fecha y últimos 4 dígitos (nunca el número completo)',
+  Fraude: 'Describí qué pasó sin incluir claves ni CBU completos',
+  Otro: 'Contanos con detalle qué pasó',
 };
 
 function detalleReserva(r) {
-  const ruta = r.tipo === 'vuelo' ? `${r.origen || '?'} - ${r.destino || '?'}` : r.hotel || 'Hotel';
-  return `${r.codigo} · ${fmtFecha(r.fecha_inicio)} · ${ruta}`;
+  const ruta = r?.tipo === 'vuelo' ? `${r?.origen || '?'} - ${r?.destino || '?'}` : r?.hotel || 'Hotel';
+  return `${r?.codigo ?? '?'} · ${fmtFecha(r?.fecha_inicio)} · ${ruta}`;
 }
 
 export function NuevoIncidenteScreen({ onCreated, reservaIdInicial }) {
@@ -34,7 +53,7 @@ export function NuevoIncidenteScreen({ onCreated, reservaIdInicial }) {
 
   useEffect(() => {
     api.get('/itinerario')
-      .then((r) => setReservas(r.data))
+      .then((r) => setReservas(r?.data ?? []))
       .catch(() => setReservasError('No pudimos cargar tus reservas. Igual podes reportar sin reserva.'));
   }, []);
 
@@ -42,7 +61,7 @@ export function NuevoIncidenteScreen({ onCreated, reservaIdInicial }) {
     setReservaId(reservaIdInicial ?? null);
   }, [reservaIdInicial]);
 
-  const reservaSel = reservas.find((r) => r.id === reservaId) || null;
+  const reservaSel = reservas?.find((r) => r?.id === reservaId) || null;
 
   function validar() {
     if (titulo.trim().length < 5) return 'El título debe tener al menos 5 caracteres.';
@@ -54,8 +73,8 @@ export function NuevoIncidenteScreen({ onCreated, reservaIdInicial }) {
     if (loading) return;
     const v = validar();
     if (v) { setError(v); return; }
-    const nombreTipo = TIPO_INCIDENTE[tipo] || tipo;
-    const nombreReserva = reservaSel ? reservaSel.codigo : 'Sin reserva';
+    const nombreTipo = labelTipo(tipo);
+    const nombreReserva = reservaSel?.codigo ?? 'Sin reserva';
     Alert.alert(
       'Enviar reporte',
       `Tipo: ${nombreTipo}\nReserva: ${nombreReserva}\nTítulo: ${titulo.trim()}\n\nUna vez enviado no podrás editarlo. ¿Confirmas el envío?`,
@@ -101,23 +120,23 @@ export function NuevoIncidenteScreen({ onCreated, reservaIdInicial }) {
       {reservaSel && <Text style={styles.aviso}>Reportando sobre {reservaSel.codigo}</Text>}
       <ErrorBanner message={error} />
       <Text style={styles.label}>Tipo de problema</Text>
-      <View style={styles.opts}>
-        {TIPOS.map((t) => (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.opts}>
+        {TIPOS?.map((t) => (
           <Pressable key={t} onPress={() => setTipo(t)} style={[styles.opt, tipo === t && styles.optActive]} accessibilityRole="button">
-            <Text style={[styles.optText, tipo === t && styles.optTextActive]}>{TIPO_INCIDENTE[t]}</Text>
+            <Text style={[styles.optText, tipo === t && styles.optTextActive]}>{labelTipo(t)}</Text>
           </Pressable>
         ))}
-      </View>
-      <Text style={styles.ayuda}>{AYUDA_TIPO[tipo] || ''}</Text>
+      </ScrollView>
+      <Text style={styles.ayuda}>{AYUDA_TIPO?.[tipo] || ''}</Text>
       <Text style={styles.label}>Reserva relacionada (opcional)</Text>
       {reservasError !== '' && <Text style={styles.muted}>{reservasError}</Text>}
       <View style={styles.opts}>
         <Pressable onPress={() => setReservaId(null)} style={[styles.opt, reservaId === null && styles.optActive]} accessibilityRole="button">
           <Text style={[styles.optText, reservaId === null && styles.optTextActive]}>Sin reserva</Text>
         </Pressable>
-        {reservas.map((r) => (
-          <Pressable key={r.id} onPress={() => setReservaId(r.id)} style={[styles.opt, reservaId === r.id && styles.optActive]} accessibilityRole="button">
-            <Text style={[styles.optText, reservaId === r.id && styles.optTextActive]}>{detalleReserva(r)}</Text>
+        {reservas?.map((r) => (
+          <Pressable key={r?.id} onPress={() => setReservaId(r?.id)} style={[styles.opt, reservaId === r?.id && styles.optActive]} accessibilityRole="button">
+            <Text style={[styles.optText, reservaId === r?.id && styles.optTextActive]}>{detalleReserva(r)}</Text>
           </Pressable>
         ))}
       </View>
