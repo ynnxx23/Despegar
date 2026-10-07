@@ -3,20 +3,13 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../shared/theme';
-import { api } from '../../shared/api';
+import { api, API_HOST } from '../../shared/api';
 import { AppButton, AppInput, ErrorBanner } from '../../shared/components';
 
 const APP_VERSION = 'v0.1.0';
 
 function apiHost() {
-  try {
-    const url = typeof process !== 'undefined' ? process.env?.EXPO_PUBLIC_API_URL : '';
-    if (!url) return 'local';
-    const sinProto = String(url).replace(/^https?:\/\//, '');
-    return sinProto.split('/')[0] || 'local';
-  } catch (e) {
-    return 'local';
-  }
+  return API_HOST || 'local';
 }
 
 export function LoginScreen({ onSuccess }) {

@@ -32,8 +32,9 @@ db/
 ## 2. Levantar en local
 
 ```powershell
-# 1. Rol/BD (una vez)
-createdb -U postgres -O despegar despegar   # pass rol: despegar_dev
+# 1. Rol/BD (una vez, con TU password: no se versiona)
+createuser -U postgres -d despegar -P
+createdb -U postgres -O despegar despegar
 # 2. Schema + seeds + migraciones
 psql -U despegar -d despegar -f db/schema.sql -f db/seeds.sql -f db/migrate_02_prioridad_nullable.sql -f db/migrate_03_gestion_casos.sql
 # 3. Env

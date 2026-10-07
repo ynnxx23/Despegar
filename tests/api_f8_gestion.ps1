@@ -31,7 +31,9 @@ try {
   $r2 = Call 'POST' '/api/register' @{ nombre = 'Agente Dos'; email = "agente2_$rand@test.com"; password = 'Clave1234' }
   if ($r2.ok) {
     $ag2Id = $r2.data.user.id
-    $env:PGPASSWORD = 'despegar_dev'
+    $env:PGPASSWORD = if ($env:PGPASSWORD) { $env:PGPASSWORD } else {
+      (Select-String -Path (Join-Path $PSScriptRoot '..\backend\.env') -Pattern '^DB_PASS=(.*)$' -ErrorAction SilentlyContinue).Matches.Groups[1].Value
+    }
     & psql -h 127.0.0.1 -U despegar -d despegar -c "UPDATE usuarios SET rol='agente' WHERE id=$ag2Id" 2>$null | Out-Null
     $l2 = Login "agente2_$rand@test.com" 'Clave1234'
     if ($l2 -and $l2.token) { $tokG2 = $l2.token }

@@ -1,8 +1,8 @@
 // Login viajero: valida inline, muestra error comprensible, feedback de carga.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
-import { api } from '../../shared/api';
+import { api, API_HOST } from '../../shared/api';
 import { AppButton, AppInput, ErrorBanner } from '../../shared/components';
 
 export function LoginScreen({ onSuccess, goRegister }) {
@@ -11,12 +11,26 @@ export function LoginScreen({ onSuccess, goRegister }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiOk, setApiOk] = useState(null);
+  const [apiError, setApiError] = useState('');
+  const [probando, setProbando] = useState(false);
+
+  const probar = useCallback(async () => {
+    setProbando(true);
+    setApiError('');
+    try {
+      await api.health();
+      setApiOk(true);
+    } catch (e) {
+      setApiOk(false);
+      setApiError(e?.message ?? 'Sin conexión con la API.');
+    } finally {
+      setProbando(false);
+    }
+  }, []);
 
   useEffect(() => {
-    api.health()
-      .then(() => setApiOk(true))
-      .catch(() => setApiOk(false));
-  }, []);
+    probar();
+  }, [probar]);
 
   async function submit() {
     setError('');
@@ -42,7 +56,10 @@ export function LoginScreen({ onSuccess, goRegister }) {
         <Text style={styles.estadoTexto}>
           {apiOk === null ? 'Conectando…' : apiOk ? 'Servicio disponible' : 'Sin conexión'}
         </Text>
+        <Text style={styles.host}>API: {API_HOST}</Text>
       </View>
+      {apiError ? <ErrorBanner message={apiError} /> : null}
+      <AppButton title="Reintentar conexión" variant="ghost" onPress={probar} loading={probando} />
       <ErrorBanner message={error} />
       <AppInput label="Email" value={email} onChangeText={setEmail} placeholder="ana@test.com" keyboard="email-address" autoCap="none" />
       <AppInput label="Contraseña" value={password} onChangeText={setPassword} placeholder="Tu contraseña" secure autoCap="none" />
@@ -59,6 +76,7 @@ const styles = StyleSheet.create({
   title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
   sub: { fontSize: theme.type.caption, color: theme.colors.muted },
   estado: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
+  host: { fontSize: theme.type.caption, color: theme.colors.muted, marginLeft: 'auto' },
   punto: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.muted },
   puntoOk: { backgroundColor: theme.colors.success },
   puntoFail: { backgroundColor: theme.colors.critical },

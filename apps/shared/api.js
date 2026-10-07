@@ -8,6 +8,14 @@
 // Sin variable cae a localhost (solo sirve en web).
 const BASE_URL = (typeof process !== 'undefined' && process.env && process.env.EXPO_PUBLIC_API_URL) || 'http://localhost:8000/api';
 
+// Host (sin esquema ni /api) para mostrar en UI y detectar config equivocada.
+export const API_HOST = String(BASE_URL).replace(/^https?:\/\//, '').split('/')[0] || 'localhost';
+export const API_BASE_URL = BASE_URL;
+
+// RN no aplica timeout por defecto: sin esto un paquete descartado deja la UI en
+// "Conectando…" para siempre. Corta a los 8s y devuelve error legible.
+const TIMEOUT_MS = 8000;
+
 let memoryToken = null;
 let onUnauthorized = null;
 
@@ -17,14 +25,34 @@ export function setOnUnauthorized(cb) { onUnauthorized = cb; }
 
 async function request(path, options = {}) {
   const token = options.token || memoryToken;
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), TIMEOUT_MS) : null;
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      ...(options.signal ? {} : controller ? { signal: controller.signal } : {}),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      },
+    });
+  } catch (e) {
+    const abortado = e && (e.name === 'AbortError' || (controller && controller.signal && controller.signal.aborted));
+    if (abortado) {
+      const err = new Error(`Timeout: la API (${API_HOST}) no respondió en ${TIMEOUT_MS / 1000}s. Revisá IP/red.`);
+      err.status = 0;
+      err.timeout = true;
+      throw err;
+    }
+    const err = new Error(`No se pudo conectar con la API (${API_HOST}): ${e?.message ?? e}`);
+    err.status = 0;
+    err.offline = true;
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && onUnauthorized) {
     try { await onUnauthorized(); } catch (e) { /* no rompe el flujo de error */ }
