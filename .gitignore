@@ -1,6 +1,20 @@
+# Secretos: NUNCA al repo.
+#   .env              -> backend/.env (DB_*, JWT_SECRET), apps/*/.env (URL API local)
+#   .env.*            -> cualquier variante (.env.local, .env.railway, ...)
+#  !.env.example      -> la plantilla si se versiona (sin valores reales)
 .env
+.env.*
+!.env.example
+
+# Node / Expo
 node_modules/
 .expo/
 dist/
+build/
 *.log
 .vscode/
+
+# Datos y artefactos locales
+backend/uploads/
+backend/.env.tmp
+apps/*/.env.tmp
