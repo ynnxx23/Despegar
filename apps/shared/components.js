@@ -24,7 +24,7 @@ export function AppButton({ title, onPress, loading, variant }) {
   );
 }
 
-export function AppInput({ label, value, onChangeText, placeholder, secure, keyboard, autoCap }) {
+export function AppInput({ label, value, onChangeText, placeholder, secure, keyboard, autoCap, returnKey, onSubmit, noCorrect, maxLen, lines }) {
   const [hidden, setHidden] = useState(!!secure);
   return (
     <View style={styles.field}>
@@ -39,6 +39,12 @@ export function AppInput({ label, value, onChangeText, placeholder, secure, keyb
           secureTextEntry={secure && hidden}
           keyboardType={keyboard || 'default'}
           autoCapitalize={autoCap || 'sentences'}
+          autoCorrect={noCorrect ? false : undefined}
+          returnKeyType={returnKey || undefined}
+          onSubmitEditing={onSubmit || undefined}
+          maxLength={maxLen || undefined}
+          multiline={!!lines}
+          numberOfLines={lines || undefined}
         />
         {secure && (
           <Pressable accessibilityRole="button" onPress={() => setHidden(!hidden)} style={styles.eye}>

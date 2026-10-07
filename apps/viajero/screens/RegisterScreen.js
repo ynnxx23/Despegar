@@ -1,6 +1,6 @@
 // Registro viajero: crea rol viajero (el backend lo impone aunque se manipule el cliente).
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
 import { AppButton, AppInput, ErrorBanner } from '../../shared/components';
@@ -44,7 +44,7 @@ export function RegisterScreen({ onSuccess, goLogin }) {
   }
 
   return (
-    <View style={styles.root}>
+    <ScrollView style={styles.flex} contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Crear cuenta</Text>
       <Text style={styles.sub}>Solo crea cuentas de viajero. Las cuentas de agente las da el equipo.</Text>
       <ErrorBanner message={error} />
@@ -64,12 +64,13 @@ export function RegisterScreen({ onSuccess, goLogin }) {
       )}
       <AppButton title="Registrarme" onPress={submit} loading={loading} />
       <AppButton title="Ya tengo cuenta" onPress={goLogin} variant="ghost" />
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background, padding: theme.spacing.lg, justifyContent: 'center', gap: theme.spacing.md },
+  flex: { flex: 1, backgroundColor: theme.colors.background },
+  root: { flexGrow: 1, backgroundColor: theme.colors.background, padding: theme.spacing.lg, justifyContent: 'center', gap: theme.spacing.md },
   title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
   sub: { fontSize: theme.type.caption, color: theme.colors.muted },
   check: { gap: 4 },

@@ -1,6 +1,6 @@
 // Login viajero: valida inline, muestra error comprensible, feedback de carga.
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
 import { AppButton, AppInput, ErrorBanner } from '../../shared/components';
@@ -34,7 +34,7 @@ export function LoginScreen({ onSuccess, goRegister }) {
   }
 
   return (
-    <View style={styles.root}>
+    <ScrollView style={styles.flex} contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Despegar · Ayuda al Viajero</Text>
       <Text style={styles.sub}>Tus viajes y respuestas en un solo lugar.</Text>
       <View style={styles.estado}>
@@ -49,12 +49,13 @@ export function LoginScreen({ onSuccess, goRegister }) {
       <AppButton title="Ingresar" onPress={submit} loading={loading} />
       <AppButton title="Crear cuenta" onPress={goRegister} variant="ghost" />
       <Text style={styles.hint}>Demo: ana@test.com / Viaje1234</Text>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background, padding: theme.spacing.lg, justifyContent: 'center', gap: theme.spacing.md },
+  flex: { flex: 1, backgroundColor: theme.colors.background },
+  root: { flexGrow: 1, backgroundColor: theme.colors.background, padding: theme.spacing.lg, justifyContent: 'center', gap: theme.spacing.md },
   title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
   sub: { fontSize: theme.type.caption, color: theme.colors.muted },
   estado: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },

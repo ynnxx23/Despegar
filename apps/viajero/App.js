@@ -12,12 +12,14 @@ import { ItinerarioScreen } from './screens/ItinerarioScreen';
 import { NuevoIncidenteScreen } from './screens/NuevoIncidenteScreen';
 import { MisIncidentesScreen, DetalleIncidenteScreen } from './screens/MisIncidentesScreen';
 import { AyudaScreen } from './screens/AyudaScreen';
+import { PerfilScreen } from './screens/PerfilScreen';
 
 const TABS = [
   { key: 'itinerario', label: 'Viajes' },
   { key: 'nuevo', label: 'Reportar' },
   { key: 'mios', label: 'Incidentes' },
   { key: 'ayuda', label: 'Ayuda' },
+  { key: 'perfil', label: 'Perfil' },
 ];
 
 export default function App() {
@@ -112,7 +114,7 @@ function AppShell() {
     );
   }
 
-  const inicial = String(user.nombre || user.email || 'V').trim().charAt(0).toUpperCase() || 'V';
+  const inicial = String(user?.nombre || user?.email || 'V').trim().charAt(0).toUpperCase() || 'V';
 
   return (
     <View style={styles.root}>
@@ -121,7 +123,7 @@ function AppShell() {
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{inicial}</Text>
           </View>
-          <Text style={styles.hello}>Hola, {user.nombre}</Text>
+          <Text style={styles.hello}>Hola, {user?.nombre || 'Viajero'}</Text>
         </View>
         <Pressable onPress={logout} accessibilityRole="button"><Text style={styles.exit}>Salir</Text></Pressable>
       </View>
@@ -134,6 +136,8 @@ function AppShell() {
           <NuevoIncidenteScreen key={nuevoKey} reservaIdInicial={reservaPresel} onCreated={(id) => { setDetalleId(id); setTab('mios'); }} />
         ) : tab === 'mios' ? (
           <MisIncidentesScreen onOpen={setDetalleId} refreshKey={miosKey} onReportar={handleReportar} />
+        ) : tab === 'perfil' ? (
+          <PerfilScreen user={user} onLogout={logout} />
         ) : (
           <AyudaScreen />
         )}
@@ -141,7 +145,7 @@ function AppShell() {
       {detalleId === null && (
         <View style={[styles.tabs, { paddingBottom: insets.bottom, minHeight: 56 + insets.bottom }]}>
           {TABS.map((t) => (
-            <Pressable key={t.key} onPress={() => goTab(t.key)} style={[styles.tab, tab === t.key && styles.tabActive]} accessibilityRole="button">
+            <Pressable key={t.key} onPress={() => goTab(t.key)} style={[styles.tab, tab === t.key && styles.tabActive]} accessibilityRole="button" accessibilityLabel={`Ir a ${t.label}`} accessibilityState={{ selected: tab === t.key }}>
               <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
             </Pressable>
           ))}
