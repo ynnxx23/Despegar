@@ -1,7 +1,7 @@
 <?php
 // Admin (agente): cola global ordenada + triaje/SLA + responder + gestion de casos.
 class AdminController {
-  public static function cola(PDO $db): void {
+  public static function cola(PDO $db, array $claims): void {
     $estado = $_GET['estado'] ?? null;
     $prioridad = $_GET['prioridad'] ?? null;
     $orden = strtolower($_GET['orden'] ?? 'urgencia');
@@ -12,16 +12,22 @@ class AdminController {
     $page = max((int)($_GET['page'] ?? 1), 1);
 
     $m = new Incidente($db);
-    $data = $m->listAll($estado, $prioridad, $orden, $limit, ($page - 1) * $limit);
+    $data = $m->listAll($estado, $prioridad, $orden, $limit, ($page - 1) * $limit, (int)($claims['sub'] ?? 0) ?: null);
     $data = array_map([Incidente::class, 'toAgent'], $data);
     Response::json(['data' => $data, 'total' => $m->countAll($estado, $prioridad), 'page' => $page, 'limit' => $limit], 200);
   }
 
-  // Mi cola: asignados a mi o seguidos por mi (no Resueltos salvo ?estado=Resuelto).
+  // Mi cola: 'mios' (reclamados por mi), 'siguiendo' (los que sigo y no son mios) o
+  // sin vista (union: asignados + seguidos). No Resueltos salvo ?estado=Resuelto.
   public static function miCola(PDO $db, array $claims): void {
     $estado = $_GET['estado'] ?? null;
     $prioridad = $_GET['prioridad'] ?? null;
     $orden = strtolower($_GET['orden'] ?? 'urgencia');
+    $vista = isset($_GET['vista']) ? strtolower(trim((string)$_GET['vista'])) : null;
+    if ($vista === '') $vista = null;
+    if ($vista !== null && !in_array($vista, ['mios', 'siguiendo'], true)) {
+      Response::error('Vista inválida (mios|siguiendo)', 400);
+    }
     if ($estado !== null && !in_array($estado, Incidente::ESTADOS, true)) Response::error('Estado inválido', 400);
     if ($prioridad !== null && !in_array($prioridad, Incidente::PRIORIDADES, true)) Response::error('Prioridad inválida', 400);
     if (!in_array($orden, ['asc', 'desc', 'urgencia'], true)) Response::error('Orden inválido (asc|desc|urgencia)', 400);
@@ -30,12 +36,18 @@ class AdminController {
     $yo = (int)($claims['sub'] ?? 0);
 
     $m = new Incidente($db);
-    $data = $m->miCola($yo, $estado, $prioridad, $orden, $limit, ($page - 1) * $limit);
+    $data = $m->miCola($yo, $estado, $prioridad, $orden, $limit, ($page - 1) * $limit, $vista);
     $data = array_map([Incidente::class, 'toAgent'], $data);
-    Response::json(['data' => $data, 'total' => $m->countMiCola($yo, $estado, $prioridad), 'page' => $page, 'limit' => $limit], 200);
+    Response::json([
+      'data' => $data,
+      'total' => $m->countMiCola($yo, $estado, $prioridad, $vista),
+      'page' => $page,
+      'limit' => $limit,
+      'vista' => $vista,
+    ], 200);
   }
 
-  public static function ver(PDO $db, int $id): void {
+  public static function ver(PDO $db, array $claims, int $id): void {
     $m = new Incidente($db);
     $inc = $m->findById($id);
     if (!$inc) Response::error('Incidente no encontrado', 404);
@@ -53,7 +65,18 @@ class AdminController {
         $reserva = $r;
       }
     }
-    Response::json(['data' => ['incidente' => Incidente::toAgent($inc), 'usuario' => $usuario, 'reserva' => $reserva]], 200);
+    $yo = (int)($claims['sub'] ?? 0);
+    $asignado = $m->asignado($id);
+    Response::json(['data' => [
+      'incidente' => Incidente::toAgent($inc),
+      'usuario' => $usuario,
+      'reserva' => $reserva,
+      // Quien tiene el caso, quienes lo siguen y si el que consulta lo sigue.
+      'asignado' => $asignado,
+      'seguidores' => $m->seguidores($id),
+      'siguiendo' => $m->siguiendo($id, $yo),
+      'mi_asignado' => $asignado !== null && (int)$asignado['id'] === $yo,
+    ]], 200);
   }
 
   public static function actualizar(PDO $db, array $claims, int $id, array $body): void {
@@ -191,7 +214,7 @@ class AdminController {
     Response::json(['data' => Incidente::toAgent($m->findById($id))], 200);
   }
 
-  // Seguir el caso (idempotente).
+  // Seguir el caso (idempotente). Cualquier agente puede seguir un caso, tenga o no el caso.
   public static function seguir(PDO $db, array $claims, int $id): void {
     $m = new Incidente($db);
     if (!$m->findById($id)) Response::error('Incidente no encontrado', 404);
@@ -199,7 +222,12 @@ class AdminController {
     $st = $db->prepare('INSERT INTO incidente_seguidores (incidente_id, agente_id) VALUES (?, ?) ON CONFLICT DO NOTHING');
     $st->execute([$id, $yo]);
     $m->registrarEvento($id, $yo ?: null, 'seguir', null);
-    Response::json(['data' => ['incidente_id' => $id, 'siguiendo' => true]], 200);
+    Response::json(['data' => [
+      'incidente_id' => $id,
+      'siguiendo' => true,
+      'seguidores' => $m->seguidores($id),
+      'asignado' => $m->asignado($id),
+    ]], 200);
   }
 
   // Dejar de seguir (idempotente).
@@ -210,7 +238,12 @@ class AdminController {
     $st = $db->prepare('DELETE FROM incidente_seguidores WHERE incidente_id = ? AND agente_id = ?');
     $st->execute([$id, $yo]);
     $m->registrarEvento($id, $yo ?: null, 'dejar_seguir', null);
-    Response::json(['data' => ['incidente_id' => $id, 'siguiendo' => false]], 200);
+    Response::json(['data' => [
+      'incidente_id' => $id,
+      'siguiendo' => false,
+      'seguidores' => $m->seguidores($id),
+      'asignado' => $m->asignado($id),
+    ]], 200);
   }
 
   // Historial interno con actor_nombre (para agente).

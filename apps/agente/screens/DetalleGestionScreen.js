@@ -55,6 +55,7 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
       setAsignado(asig);
       const segs = payload?.seguidores ?? incidente?.seguidores ?? [];
       setSeguidores(Array.isArray(segs) ? segs : []);
+      if (typeof payload?.siguiendo === 'boolean') setSiguiendo(payload.siguiendo);
     } catch (e) {
       setError(e?.message ?? 'No se pudo cargar el caso.');
     }
@@ -169,16 +170,18 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
 
   async function alternarSeguir() {
     setSavingAccion(true);
+    setError('');
     try {
       if (siguiendo) {
-        await api.post(`/admin/incidentes/${id}/seguir`, { _method: 'DELETE' }).catch(async () => {
-          // Fallback si backend no soporta POST con _method: intenta DELETE directo vía fetch del api.
-          await api.post(`/admin/incidentes/${id}/seguir/delete`, {});
-        });
+        const r = await api.del(`/admin/incidentes/${id}/seguir`);
         setSiguiendo(false);
+        const segs = r?.data?.seguidores;
+        if (Array.isArray(segs)) setSeguidores(segs);
       } else {
-        await api.post(`/admin/incidentes/${id}/seguir`, {});
+        const r = await api.post(`/admin/incidentes/${id}/seguir`, {});
         setSiguiendo(true);
+        const segs = r?.data?.seguidores;
+        if (Array.isArray(segs)) setSeguidores(segs);
       }
       marcarCambio();
       await load();
@@ -334,6 +337,8 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
   }
   const asignadoId = asignado?.id ?? inc?.asignado?.id ?? inc?.asignado_id ?? null;
   const esMio = asignadoId != null && yo?.id != null && String(asignadoId) === String(yo.id);
+  const nombreAsignado = asignado?.nombre ?? inc?.asignado?.nombre ?? asignadoNombreFallback()
+    ?? (inc?.asignado_nombre ?? null);
   const sugerida = inc?.prioridad_sugerida ?? inc?.sugerida ?? null;
   const motivoSugerida = inc?.prioridad_motivo ?? inc?.motivo_sugerida ?? null;
   const nombresSeguidores = (seguidores ?? []).map((s) => s?.nombre ?? `#${s?.id ?? '—'}`).filter(Boolean);
@@ -387,6 +392,15 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
         {inc && (
           <View style={styles.card}>
             <Text style={styles.subtitle}>Acción</Text>
+            <View style={styles.asignadoBox}>
+              <Text style={styles.muted}>
+                {sinAsignar
+                  ? 'Nadie lo reclamó todavía'
+                  : esMio
+                    ? `Lo tenés vos${nombreAsignado ? ` (${nombreAsignado})` : ''}`
+                    : `Reclamado por ${nombreAsignado ?? 'otro agente'}`}
+              </Text>
+            </View>
             {sinAsignar ? (
               <AppButton title={savingAccion ? 'Cargando…' : 'Reclamar caso'} onPress={reclamar} />
             ) : (
@@ -411,21 +425,24 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
                     </Pressable>
                   </>
                 )}
-                {!esMio && (
-                  <Text style={styles.muted}>
-                    Asignado a {asignado?.nombre ?? inc?.asignado?.nombre ?? asignadoNombreFallback() ?? 'otro agente'}
-                  </Text>
-                )}
               </View>
             )}
             <Pressable
               onPress={alternarSeguir}
-              style={styles.secBtn}
+              disabled={savingAccion}
+              style={[styles.secBtn, siguiendo && styles.secBtnOn]}
               accessibilityRole="button"
               accessibilityLabel={siguiendo ? 'Dejar de seguir caso' : 'Seguir caso'}
             >
-              <Text style={styles.secTexto}>{siguiendo ? 'Dejar de seguir' : 'Seguir'}</Text>
+              <Text style={[styles.secTexto, siguiendo && styles.secTextoOn]}>
+                {siguiendo ? 'Dejar de seguir' : 'Seguir'}
+              </Text>
             </Pressable>
+            <Text style={styles.muted}>
+              {siguiendo
+                ? 'Lo seguís: aparece en tu pestaña Siguiendo.'
+                : 'Seguí el caso para verlo en tu pestaña Siguiendo. Puede seguirlo cualquiera, tenga o no el caso.'}
+            </Text>
             {nombresSeguidores.length > 0 && (
               <Text style={styles.muted}>Siguen: {nombresSeguidores.join(', ')}</Text>
             )}
@@ -600,7 +617,10 @@ const styles = StyleSheet.create({
   chipText: { color: theme.colors.text },
   chipTextActive: { color: theme.colors.primary, fontWeight: 'bold' },
   secBtn: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, minHeight: 44, paddingHorizontal: theme.spacing.md, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.card },
+  secBtnOn: { borderColor: theme.colors.primary, backgroundColor: '#EDE7FB' },
   secTexto: { color: theme.colors.primary, fontWeight: 'bold' },
+  secTextoOn: { color: theme.colors.primary },
+  asignadoBox: { backgroundColor: theme.colors.card, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm },
   body: { fontSize: theme.type.body, color: theme.colors.text },
   muted: { fontSize: theme.type.caption, color: theme.colors.muted },
   area: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.card, minHeight: 90, padding: theme.spacing.sm, fontSize: theme.type.body, color: theme.colors.text },

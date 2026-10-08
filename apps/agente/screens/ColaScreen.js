@@ -8,7 +8,7 @@ import { api } from '../../shared/api';
 import { AppButton, Badge, EmptyState, ErrorBanner } from '../../shared/components';
 import { TIPO_INCIDENTE } from '../../shared/format';
 
-const TABS = ['Activos', 'Sin triar', 'Míos', 'Resueltos'];
+const TABS = ['Activos', 'Sin triar', 'Míos', 'Siguiendo', 'Resueltos'];
 const SORTS = [
   { id: 'urgencia', label: 'Urgentes' },
   { id: 'asc', label: 'Antiguos' },
@@ -54,7 +54,7 @@ function slaInfo(item) {
 }
 
 function asignadoId(item) {
-  return item?.asignado?.id ?? item?.asignado_id ?? item?.agente_id ?? null;
+  return item?.asignado?.id ?? item?.asignado_id ?? item?.asignado_a ?? item?.agente_id ?? null;
 }
 
 function asignadoNombre(item) {
@@ -91,6 +91,7 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
   const [refreshing, setRefreshing] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [reclamando, setReclamando] = useState(null);
+  const [siguiendoId, setSiguiendoId] = useState(null);
   const dataRef = useRef(null);
   dataRef.current = items;
 
@@ -122,17 +123,22 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
       let lista = [];
       let tot = 0;
 
-      if (tab === 'Míos') {
+      if (tab === 'Míos' || tab === 'Siguiendo') {
+        // Míos = casos que reclamé. Siguiendo = los que sigo y no son míos.
+        const vista = tab === 'Míos' ? 'mios' : 'siguiendo';
         try {
-          const r = await api.get(`/admin/mi-cola?${baseParams}`);
+          const r = await api.get(`/admin/mi-cola?vista=${vista}&${baseParams}`);
           lista = r?.data ?? r?.items ?? [];
           tot = r?.total ?? lista?.length ?? 0;
         } catch (e) {
+          // Fallback: cola global filtrada en cliente.
           const r = await api.get(`/admin/incidentes?${baseParams}`);
           const todas = r?.data ?? [];
-          lista = yoId != null
-            ? todas.filter((i) => String(asignadoId(i) ?? '') === String(yoId ?? ''))
-            : [];
+          lista = (todas ?? []).filter((i) => {
+            const mio = yoId != null && String(asignadoId(i) ?? '') === String(yoId ?? '');
+            const sigo = i?.siguiendo === true;
+            return vista === 'mios' ? mio : (sigo && !mio);
+          });
           tot = lista?.length ?? 0;
         }
       } else {
@@ -227,8 +233,27 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
     ]);
   }
 
-  const visible = useMemo(() => {
-    const lista = [...(items ?? [])];
+  // Seguir / dejar de seguir desde la lista (cualquier agente puede seguir un caso).
+  async function alternarSeguir(item) {
+    const id = item?.id;
+    if (id == null || siguiendoId != null) return;
+    setSiguiendoId(id);
+    setError('');
+    try {
+      if (item?.siguiendo === true) {
+        await api.del(`/admin/incidentes/${id}/seguir`);
+      } else {
+        await api.post(`/admin/incidentes/${id}/seguir`, {});
+      }
+      await load(paginaSegura);
+    } catch (e) {
+      setError(e?.message ?? 'No se pudo actualizar el seguimiento.');
+    } finally {
+      setSiguiendoId(null);
+    }
+  }
+
+  const visible = useMemo(() => {    const lista = [...(items ?? [])];
     if (orden === 'urgencia') {
       lista.sort((a, b) => {
         const va = slaInfo(a)?.vencido ? 0 : 1;
@@ -378,6 +403,9 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
         const ini = iniciales(nombre);
         const sinAsignar = asignadoId(i) == null && !nombre;
         const respuestasN = i?.respuestas_n ?? i?.respuestas_count ?? i?.conteo_respuestas ?? null;
+        const sigo = i?.siguiendo === true;
+        const seguidoresN = i?.seguidores_count ?? 0;
+        const esMio = yo?.id != null && asignadoId(i) != null && String(asignadoId(i)) === String(yo.id);
         return (
           <Pressable
             key={i?.id}
@@ -397,21 +425,44 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
             <View style={styles.row}>
               <Badge text={i?.estado === 'EnGestion' ? 'En gestión' : (i?.estado ?? '—')} color={theme.status?.[i?.estado] || theme.colors.muted} />
               <Badge text={etiquetaPrioridad(i?.prioridad)} color={theme.priority?.[i?.prioridad] || theme.colors.muted} />
+              {nombre ? (
+                <Badge
+                  text={esMio ? 'Lo tenés vos' : `Reclamado por ${nombre}`}
+                  color={theme.colors.primary}
+                />
+              ) : (
+                <Badge text="Sin reclamar" color={theme.colors.muted} />
+              )}
+              {sigo && <Badge text="Siguiendo" color={theme.colors.primary} />}
+              {!sigo && seguidoresN > 0 && <Badge text={`${seguidoresN} sig.`} color={theme.colors.muted} />}
               <View style={styles.asignado} accessibilityLabel={nombre ? `Asignado a ${nombre}` : 'Sin asignar'}>
                 <Text style={styles.asignadoTexto}>{ini ?? 'Sin asignar'}</Text>
               </View>
             </View>
-            {sinAsignar && (
+            <View style={styles.accionesFila}>
+              {sinAsignar && (
+                <Pressable
+                  onPress={() => reclamar(i)}
+                  disabled={reclamando === i?.id}
+                  style={styles.reclamarBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Reclamar caso ${i?.id ?? ''}`}
+                >
+                  <Text style={styles.reclamarTexto}>{reclamando === i?.id ? 'Reclamando…' : 'Reclamar'}</Text>
+                </Pressable>
+              )}
               <Pressable
-                onPress={() => reclamar(i)}
-                disabled={reclamando === i?.id}
-                style={styles.reclamarBtn}
+                onPress={() => alternarSeguir(i)}
+                disabled={siguiendoId === i?.id}
+                style={[styles.reclamarBtn, sigo && styles.reclamarBtnOn]}
                 accessibilityRole="button"
-                accessibilityLabel={`Reclamar caso ${i?.id ?? ''}`}
+                accessibilityLabel={sigo ? `Dejar de seguir caso ${i?.id ?? ''}` : `Seguir caso ${i?.id ?? ''}`}
               >
-                <Text style={styles.reclamarTexto}>{reclamando === i?.id ? 'Reclamando…' : 'Reclamar'}</Text>
+                <Text style={[styles.reclamarTexto, sigo && styles.reclamarTextoOn]}>
+                  {siguiendoId === i?.id ? 'Actualizando…' : (sigo ? 'Dejar de seguir' : 'Seguir')}
+                </Text>
               </Pressable>
-            )}
+            </View>
           </Pressable>
         );
       })}
@@ -480,6 +531,9 @@ const styles = StyleSheet.create({
   vencido: { color: theme.colors.critical, fontWeight: 'bold', fontSize: theme.type.caption },
   asignado: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 999, paddingHorizontal: theme.spacing.sm, paddingVertical: 4 },
   asignadoTexto: { fontSize: theme.type.caption, color: theme.colors.text, fontWeight: 'bold' },
-  reclamarBtn: { backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  reclamarBtn: { backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4, paddingHorizontal: theme.spacing.md },
   reclamarTexto: { color: '#fff', fontWeight: 'bold' },
+  accionesFila: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm, alignItems: 'center' },
+  reclamarBtnOn: { backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.primary },
+  reclamarTextoOn: { color: theme.colors.primary },
 });

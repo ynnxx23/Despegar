@@ -58,6 +58,12 @@ class Incidente {
     if (array_key_exists('asignado_a', $row)) {
       $row['asignado_a'] = $row['asignado_a'] === null ? null : (int)$row['asignado_a'];
     }
+    if (array_key_exists('seguidores_count', $row)) {
+      $row['seguidores_count'] = (int)$row['seguidores_count'];
+    }
+    if (array_key_exists('siguiendo', $row)) {
+      $row['siguiendo'] = in_array($row['siguiendo'], [true, 1, '1', 't', 'true'], true);
+    }
     return $row;
   }
 
@@ -114,6 +120,37 @@ class Incidente {
     return $n === false || $n === null ? null : (string)$n;
   }
 
+  // Agente que reclamo el caso (id + nombre), o null si esta sin asignar.
+  public function asignado(int $id): ?array {
+    $st = $this->db->prepare(
+      'SELECT u.id, u.nombre, u.email FROM incidentes i JOIN usuarios u ON u.id = i.asignado_a WHERE i.id = ? LIMIT 1'
+    );
+    $st->execute([$id]);
+    $a = $st->fetch();
+    if (!$a) return null;
+    return ['id' => (int)$a['id'], 'nombre' => (string)$a['nombre'], 'email' => (string)$a['email']];
+  }
+
+  // Agentes que siguen el caso (cualquiera puede seguir, tenga o no el caso).
+  public function seguidores(int $id): array {
+    $st = $this->db->prepare(
+      'SELECT u.id, u.nombre, u.email FROM incidente_seguidores s'
+      . ' JOIN usuarios u ON u.id = s.agente_id WHERE s.incidente_id = ? ORDER BY u.nombre'
+    );
+    $st->execute([$id]);
+    return array_map(function (array $r): array {
+      return ['id' => (int)$r['id'], 'nombre' => (string)$r['nombre'], 'email' => (string)$r['email']];
+    }, $st->fetchAll());
+  }
+
+  // El agente indicado sigue este caso?
+  public function siguiendo(int $id, int $agenteId): bool {
+    if ($agenteId <= 0) return false;
+    $st = $this->db->prepare('SELECT 1 FROM incidente_seguidores WHERE incidente_id = ? AND agente_id = ? LIMIT 1');
+    $st->execute([$id, $agenteId]);
+    return (bool)$st->fetchColumn();
+  }
+
   // Orden urgencia: vencidos SLA primero, luego sin triar, luego Critica/Alta/Baja, luego creado ASC.
   private static function ordenUrgencia(): string {
     return " ORDER BY" .
@@ -124,15 +161,25 @@ class Incidente {
       " creado_at ASC";
   }
 
-  public function listAll(?string $estado, ?string $prioridad, string $orden, int $limit, int $offset): array {
-    $sql = 'SELECT * FROM incidentes WHERE 1=1';
+  public function listAll(?string $estado, ?string $prioridad, string $orden, int $limit, int $offset, ?int $agenteId = null): array {
+    // Proyeccion agente: incluye quien tiene el caso (asignado_nombre), cuantos lo siguen
+    // y si el agente que consulta lo sigue (siguiendo).
+    $sql = 'SELECT i.*, u.nombre AS asignado_nombre,'
+      . ' (SELECT COUNT(*) FROM incidente_seguidores s WHERE s.incidente_id = i.id) AS seguidores_count';
     $params = [];
-    if ($estado !== null) { $sql .= ' AND estado = ?'; $params[] = $estado; }
-    if ($prioridad !== null) { $sql .= ' AND prioridad = ?'; $params[] = $prioridad; }
+    if ($agenteId !== null && $agenteId > 0) {
+      $sql .= ', EXISTS(SELECT 1 FROM incidente_seguidores s2 WHERE s2.incidente_id = i.id AND s2.agente_id = ?) AS siguiendo';
+      $params[] = $agenteId;
+    } else {
+      $sql .= ', FALSE AS siguiendo';
+    }
+    $sql .= ' FROM incidentes i LEFT JOIN usuarios u ON u.id = i.asignado_a WHERE 1=1';
+    if ($estado !== null) { $sql .= ' AND i.estado = ?'; $params[] = $estado; }
+    if ($prioridad !== null) { $sql .= ' AND i.prioridad = ?'; $params[] = $prioridad; }
     if ($orden === 'urgencia') {
       $sql .= self::ordenUrgencia();
     } else {
-      $sql .= $orden === 'desc' ? ' ORDER BY creado_at DESC' : ' ORDER BY creado_at ASC';
+      $sql .= $orden === 'desc' ? ' ORDER BY i.creado_at DESC' : ' ORDER BY i.creado_at ASC';
     }
     $sql .= ' LIMIT ? OFFSET ?';
     $params[] = $limit;
@@ -152,11 +199,15 @@ class Incidente {
     return (int)$st->fetchColumn();
   }
 
-  // Mi cola: asignados a mi o seguidos por mi, no Resueltos salvo filtro explicito.
-  public function miCola(int $agenteId, ?string $estado, ?string $prioridad, string $orden, int $limit, int $offset): array {
-    $sql = 'SELECT i.* FROM incidentes i' .
-      ' WHERE (i.asignado_a = ? OR EXISTS (SELECT 1 FROM incidente_seguidores s WHERE s.incidente_id = i.id AND s.agente_id = ?))';
-    $params = [$agenteId, $agenteId];
+  // Mi cola. $vista: 'mios' (reclamados por mi), 'siguiendo' (los que sigo y no son mios)
+  // o null (union: asignados + seguidos). No Resueltos salvo filtro explicito.
+  public function miCola(int $agenteId, ?string $estado, ?string $prioridad, string $orden, int $limit, int $offset, ?string $vista = null): array {
+    $sql = 'SELECT i.*, u.nombre AS asignado_nombre,'
+      . ' (SELECT COUNT(*) FROM incidente_seguidores s WHERE s.incidente_id = i.id) AS seguidores_count,'
+      . ' EXISTS(SELECT 1 FROM incidente_seguidores s2 WHERE s2.incidente_id = i.id AND s2.agente_id = ?) AS siguiendo'
+      . ' FROM incidentes i LEFT JOIN usuarios u ON u.id = i.asignado_a WHERE 1=1';
+    $params = [$agenteId];
+    $sql .= $this->filtroVista($vista, $agenteId, $params);
     if ($estado !== null) {
       $sql .= ' AND i.estado = ?';
       $params[] = $estado;
@@ -182,10 +233,27 @@ class Incidente {
     return array_map([self::class, 'norm'], $st->fetchAll());
   }
 
-  public function countMiCola(int $agenteId, ?string $estado, ?string $prioridad): int {
-    $sql = 'SELECT COUNT(*) FROM incidentes i' .
-      ' WHERE (i.asignado_a = ? OR EXISTS (SELECT 1 FROM incidente_seguidores s WHERE s.incidente_id = i.id AND s.agente_id = ?))';
-    $params = [$agenteId, $agenteId];
+  // Filtro de vista para mi cola (agrega params en orden).
+  private function filtroVista(?string $vista, int $agenteId, array &$params): string {
+    if ($vista === 'mios') {
+      $params[] = $agenteId;
+      return ' AND i.asignado_a = ?';
+    }
+    if ($vista === 'siguiendo') {
+      $params[] = $agenteId;
+      $params[] = $agenteId;
+      return ' AND EXISTS(SELECT 1 FROM incidente_seguidores s3 WHERE s3.incidente_id = i.id AND s3.agente_id = ?)'
+        . ' AND (i.asignado_a IS NULL OR i.asignado_a <> ?)';
+    }
+    $params[] = $agenteId;
+    $params[] = $agenteId;
+    return ' AND (i.asignado_a = ? OR EXISTS(SELECT 1 FROM incidente_seguidores s4 WHERE s4.incidente_id = i.id AND s4.agente_id = ?))';
+  }
+
+  public function countMiCola(int $agenteId, ?string $estado, ?string $prioridad, ?string $vista = null): int {
+    $sql = 'SELECT COUNT(*) FROM incidentes i WHERE 1=1';
+    $params = [];
+    $sql .= $this->filtroVista($vista, $agenteId, $params);
     if ($estado !== null) {
       $sql .= ' AND i.estado = ?';
       $params[] = $estado;

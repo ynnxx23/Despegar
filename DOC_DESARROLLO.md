@@ -151,6 +151,11 @@ Incidentes (filtros, badges) y Detalle con hilo. Navegación por tabs + detalle 
 Agente (`despegar-agente`): Login corporativo (rechaza no-agente, sin registro), Cola
 (resumen, filtros, orden asc/desc, paginación, highlight Crítica) y Gestión (PUT
 prioridad/estado con confirmación en Resuelto, responder, hilo).
+Cola por pestañas `[Activos | Sin triar | Míos | Siguiendo | Resueltos]`: "Míos" son los casos
+**reclamados** (`mi-cola?vista=mios`), "Siguiendo" los que el agente **sigue** y no son suyos
+(`mi-cola?vista=siguiendo`); seguir es libre (cualquier agente puede seguir un caso aunque otro
+lo tenga). Cada card muestra quién lo reclamó (`asignado_nombre`), si lo seguís y cuántos lo
+siguen; el detalle expone `asignado`, `seguidores`, `siguiendo` y `mi_asignado`.
 
 Compartido (`apps/shared`): `theme` (violeta `#6C2BD9`/`#4A1FA3`, fondo `#F6F5FB`,
 semántica prioridad/estado, spacing base 8, radius 12/16, type 24/18/16/14, táctil 48),
