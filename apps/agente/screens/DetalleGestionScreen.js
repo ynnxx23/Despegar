@@ -1,37 +1,86 @@
-// Gestión del caso: ACCIÓN primero, viajero/reserva, triaje, responder/hilo, historial.
+// Gestion del caso: carga los datos y coordina las acciones (reclamar, seguir, derivar, responder).
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View, ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
-import { AppButton, Badge, EmptyState, ErrorBanner } from '../../shared/components';
-import { TIPO_INCIDENTE, TIPO_RESERVA, fmtFecha } from '../../shared/format';
+import { AppButton, Badge, EmptyState, ErrorBanner, FormScrollView } from '../../shared/components';
+import { etiquetaEstado } from '../../shared/format';
+import { styles } from '../components/estilosGestion';
+import { PanelAccion, PanelHistorial, PanelRespuesta, PanelTriaje, PanelViajero, ResumenCaso } from '../components/panelesGestion';
 
-const MAX_RESPUESTA = 2000;
-
-function accionLegible(a) {
-  const t = String(a ?? '');
-  if (!t) return 'Movimiento';
-  return t.replace(/_/g, ' ');
-}
-
-export function DetalleGestionScreen({ id, onBack, onChange }) {
-  const insets = useSafeAreaInsets();
+// Carga el caso y sus datos relacionados.
+function useCaso(id) {
   const [inc, setInc] = useState(null);
   const [viajero, setViajero] = useState(null);
   const [reserva, setReserva] = useState(null);
   const [asignado, setAsignado] = useState(null);
   const [seguidores, setSeguidores] = useState([]);
-  const [siguiendo, setSiguiendo] = useState(false);
+  const [siguiendoApi, setSiguiendoApi] = useState(null);
   const [yo, setYo] = useState(null);
   const [hilo, setHilo] = useState([]);
   const [historial, setHistorial] = useState(null);
+  const [error, setError] = useState('');
+
+  const recargar = useCallback(async () => {
+    setError('');
+    try {
+      const r = await api.get(`/admin/incidentes/${id}`);
+      const payload = r?.data ?? {};
+      const incidente = payload?.incidente ?? payload;
+      setInc(incidente ?? null);
+      setViajero(payload?.usuario ?? null);
+      setReserva(payload?.reserva ?? null);
+      setAsignado(payload?.asignado ?? null);
+      const segs = payload?.seguidores ?? [];
+      setSeguidores(Array.isArray(segs) ? segs : []);
+      setSiguiendoApi(typeof payload?.siguiendo === 'boolean' ? payload.siguiendo : null);
+    } catch (e) {
+      setError(e?.message ?? 'No se pudo cargar el caso.');
+    }
+
+    try {
+      const r = await api.get(`/admin/incidentes/${id}/respuestas`);
+      setHilo(r?.data ?? []);
+    } catch (e) { /* el hilo es opcional */ }
+
+    try {
+      const r = await api.get(`/admin/incidentes/${id}/historial`);
+      const lista = r?.data ?? r?.historial ?? [];
+      setHistorial(Array.isArray(lista) ? lista : []);
+    } catch (e) {
+      setHistorial(null);
+    }
+
+    try {
+      const r = await api.me();
+      setYo(r?.user ?? r?.data?.user ?? null);
+    } catch (e) { /* el usuario es opcional */ }
+  }, [id]);
+
+  useEffect(() => { recargar(); }, [recargar]);
+
+  // El backend es la fuente de verdad; la lista de seguidores sirve de respaldo.
+  const siguiendoPorLista = yo?.id != null
+    && seguidores.some((s) => String(s?.id) === String(yo.id));
+  const siguiendo = siguiendoApi ?? siguiendoPorLista;
+
+  return {
+    inc, viajero, reserva, asignado, seguidores, siguiendo, yo, hilo, historial, error,
+    recargar,
+    setInc, setHilo, setHistorial, setSeguidores, setSiguiendo: setSiguiendoApi, setError,
+  };
+}
+
+export function DetalleGestionScreen({ id, onBack, onChange }) {
+  const insets = useSafeAreaInsets();
+  const caso = useCaso(id);
+
   const [agentes, setAgentes] = useState([]);
-  const [mostrarDerivar, setMostrarDerivar] = useState(false);
+  const [derivando, setDerivando] = useState(false);
   const [agenteElegido, setAgenteElegido] = useState(null);
   const [motivoDerivar, setMotivoDerivar] = useState('');
   const [mensaje, setMensaje] = useState('');
-  const [error, setError] = useState('');
   const [avisoPrioridad, setAvisoPrioridad] = useState(false);
   const [savingPut, setSavingPut] = useState(false);
   const [savingAccion, setSavingAccion] = useState(false);
@@ -40,48 +89,7 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
   const [estadoPendiente, setEstadoPendiente] = useState(null);
   const [dirty, setDirty] = useState(false);
 
-  const load = useCallback(async () => {
-    setError('');
-    try {
-      const a = await api.get(`/admin/incidentes/${id}`);
-      const payload = a?.data ?? {};
-      const incidente = payload?.incidente ?? payload;
-      setInc(incidente ?? null);
-      setViajero(payload?.usuario ?? null);
-      setReserva(payload?.reserva ?? null);
-      const asig = payload?.asignado
-        ?? (incidente?.asignado ?? null)
-        ?? (incidente?.asignado_nombre ? { id: incidente?.asignado_id ?? null, nombre: incidente.asignado_nombre } : null);
-      setAsignado(asig);
-      const segs = payload?.seguidores ?? incidente?.seguidores ?? [];
-      setSeguidores(Array.isArray(segs) ? segs : []);
-      if (typeof payload?.siguiendo === 'boolean') setSiguiendo(payload.siguiendo);
-    } catch (e) {
-      setError(e?.message ?? 'No se pudo cargar el caso.');
-    }
-    try {
-      const b = await api.get(`/admin/incidentes/${id}/respuestas`);
-      setHilo(b?.data ?? []);
-    } catch (e) { /* hilo opcional */ }
-    try {
-      const h = await api.get(`/admin/incidentes/${id}/historial`);
-      const lista = h?.data ?? h?.historial ?? [];
-      setHistorial(Array.isArray(lista) ? lista : []);
-    } catch (e) { setHistorial(null); }
-    try {
-      const m = await api.me();
-      const u = m?.user ?? m?.data?.user ?? null;
-      setYo(u ?? null);
-    } catch (e) { /* yo opcional */ }
-  }, [id]);
-
-  useEffect(() => { load(); }, [load]);
-
-  useEffect(() => {
-    const yoId = yo?.id ?? null;
-    if (yoId == null) { setSiguiendo(false); return; }
-    setSiguiendo((seguidores ?? []).some((s) => String(s?.id ?? '') === String(yoId)));
-  }, [seguidores, yo]);
+  const { inc, viajero, reserva, asignado, siguiendo, yo, hilo, historial } = caso;
 
   function marcarCambio() {
     if (!dirty) setDirty(true);
@@ -93,23 +101,18 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
   }
 
   async function put(parche) {
-    setError('');
+    caso.setError('');
     setAvisoPrioridad(false);
     setSavingPut(true);
     try {
       const r = await api.put(`/admin/incidentes/${id}`, parche);
       const payload = r?.data ?? {};
       const incidente = payload?.incidente ?? payload;
-      if (incidente?.id != null) setInc(incidente);
-      if (payload?.usuario !== undefined) setViajero(payload.usuario);
-      if (payload?.reserva !== undefined) setReserva(payload.reserva);
-      if (payload?.asignado !== undefined) setAsignado(payload.asignado);
+      if (incidente?.id != null) caso.setInc(incidente);
       marcarCambio();
     } catch (e) {
-      if (e?.status === 400 && /prioridad/i.test(e?.message ?? '')) {
-        setAvisoPrioridad(true);
-      }
-      setError(e?.message ?? 'No se pudo guardar el cambio.');
+      if (e?.status === 400 && /prioridad/i.test(e?.message ?? '')) setAvisoPrioridad(true);
+      caso.setError(e?.message ?? 'No se pudo guardar el cambio.');
     } finally {
       setSavingPut(false);
     }
@@ -117,13 +120,13 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
 
   async function recargarHistorial() {
     try {
-      const h = await api.get(`/admin/incidentes/${id}/historial`);
-      const lista = h?.data ?? [];
-      setHistorial(Array.isArray(lista) ? lista : []);
+      const r = await api.get(`/admin/incidentes/${id}/historial`);
+      const lista = r?.data ?? [];
+      caso.setHistorial(Array.isArray(lista) ? lista : []);
     } catch (e) { /* historial opcional */ }
   }
 
-  function reclamar() {
+  async function reclamar() {
     Alert.alert('Reclamar caso', `Te asignás el caso #${inc?.id ?? id}?`, [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -133,10 +136,10 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
           try {
             await api.post(`/admin/incidentes/${id}/claim`, {});
             marcarCambio();
-            await load();
+            await caso.recargar();
             await recargarHistorial();
           } catch (e) {
-            setError(e?.status === 409 ? 'Ya lo reclamó otro agente.' : (e?.message ?? 'No se pudo reclamar.'));
+            caso.setError(e?.status === 409 ? 'Ya lo reclamó otro agente.' : (e?.message ?? 'No se pudo reclamar.'));
           } finally {
             setSavingAccion(false);
           }
@@ -145,7 +148,7 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
     ]);
   }
 
-  function liberar() {
+  async function liberar() {
     Alert.alert('Liberar caso', 'El caso vuelve a la cola sin asignar. Confirmás?', [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -156,10 +159,10 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
           try {
             await api.post(`/admin/incidentes/${id}/release`, {});
             marcarCambio();
-            await load();
+            await caso.recargar();
             await recargarHistorial();
           } catch (e) {
-            setError(e?.message ?? 'No se pudo liberar.');
+            caso.setError(e?.message ?? 'No se pudo liberar.');
           } finally {
             setSavingAccion(false);
           }
@@ -170,30 +173,28 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
 
   async function alternarSeguir() {
     setSavingAccion(true);
-    setError('');
+    caso.setError('');
     try {
       if (siguiendo) {
         const r = await api.del(`/admin/incidentes/${id}/seguir`);
-        setSiguiendo(false);
-        const segs = r?.data?.seguidores;
-        if (Array.isArray(segs)) setSeguidores(segs);
+        caso.setSiguiendo(false);
+        if (Array.isArray(r?.data?.seguidores)) caso.setSeguidores(r.data.seguidores);
       } else {
         const r = await api.post(`/admin/incidentes/${id}/seguir`, {});
-        setSiguiendo(true);
-        const segs = r?.data?.seguidores;
-        if (Array.isArray(segs)) setSeguidores(segs);
+        caso.setSiguiendo(true);
+        if (Array.isArray(r?.data?.seguidores)) caso.setSeguidores(r.data.seguidores);
       }
       marcarCambio();
-      await load();
+      await caso.recargar();
     } catch (e) {
-      setError(e?.message ?? 'No se pudo actualizar el seguimiento.');
+      caso.setError(e?.message ?? 'No se pudo actualizar el seguimiento.');
     } finally {
       setSavingAccion(false);
     }
   }
 
   async function abrirDerivar() {
-    setMostrarDerivar(true);
+    setDerivando(true);
     try {
       const r = await api.get('/admin/agentes');
       const lista = r?.data ?? r?.agentes ?? [];
@@ -203,12 +204,14 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
     }
   }
 
+  function cerrarDerivacion() {
+    setDerivando(false);
+    setAgenteElegido(null);
+    setMotivoDerivar('');
+  }
+
   function confirmarDerivar() {
-    if (agenteElegido == null) {
-      setError('Elegí un agente para derivar.');
-      return;
-    }
-    const elegido = (agentes ?? []).find((a) => String(a?.id) === String(agenteElegido));
+    const elegido = agentes.find((a) => String(a?.id) === String(agenteElegido));
     Alert.alert('Derivar caso', `Derivás el caso #${inc?.id ?? id} a ${elegido?.nombre ?? `#${agenteElegido}`}?`, [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -220,14 +223,12 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
               agente_id: agenteElegido,
               ...(motivoDerivar.trim() ? { motivo: motivoDerivar.trim() } : {}),
             });
-            setMostrarDerivar(false);
-            setAgenteElegido(null);
-            setMotivoDerivar('');
+            cerrarDerivacion();
             marcarCambio();
-            await load();
+            await caso.recargar();
             await recargarHistorial();
           } catch (e) {
-            setError(e?.status === 404 ? 'Ese agente no existe.' : (e?.message ?? 'No se pudo derivar.'));
+            caso.setError(e?.status === 404 ? 'Ese agente no existe.' : (e?.message ?? 'No se pudo derivar.'));
           } finally {
             setSavingAccion(false);
           }
@@ -237,8 +238,7 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
   }
 
   function textoCierre() {
-    const tipo = inc?.tipo;
-    if (tipo === 'Fraude' || tipo === 'Otro') {
+    if (inc?.tipo === 'Fraude' || inc?.tipo === 'Otro') {
       return 'Confirma que el caso está resuelto para el viajero.';
     }
     return 'Confirma que ya hablaste con la aerolínea/hotel y el viajero fue atendido.';
@@ -251,25 +251,21 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
     ]);
   }
 
-  function pedirCambioEstado(s) {
-    if (!inc || savingPut) return;
-    if (s === inc.estado) return;
-    if (s === 'Resuelto') { cerrar(); return; }
-    if (inc.estado === 'Resuelto') {
-      setEstadoPendiente(s);
-      return;
-    }
-    put({ estado: s });
+  function pedirCambioEstado(estado) {
+    if (!inc || savingPut || estado === inc.estado) return;
+    if (estado === 'Resuelto') { cerrar(); return; }
+    if (inc.estado === 'Resuelto') { setEstadoPendiente(estado); return; }
+    put({ estado });
   }
 
   function confirmarReapertura() {
     if (motivoReapertura.trim().length < 3) {
-      setError('Contanos el motivo de la reapertura (mínimo 3 caracteres).');
+      caso.setError('Contanos el motivo de la reapertura (mínimo 3 caracteres).');
       return;
     }
     Alert.alert(
       'Reabrir caso',
-      `El caso pasa a ${estadoPendiente === 'EnGestion' ? 'En gestión' : estadoPendiente}. Avisale al viajero.`,
+      `El caso pasa a ${etiquetaEstado(estadoPendiente)}. Avisale al viajero.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -285,9 +281,9 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
   }
 
   async function responder() {
-    setError('');
+    caso.setError('');
     const texto = mensaje.trim();
-    if (texto.length < 2) { setError('Escribí una respuesta de al menos 2 caracteres.'); return; }
+    if (texto.length < 2) { caso.setError('Escribí una respuesta de al menos 2 caracteres.'); return; }
     setSavingReply(true);
     try {
       const r = await api.post(`/admin/incidentes/${id}/respuestas`, { mensaje: texto });
@@ -295,7 +291,7 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
       setMensaje('');
       marcarCambio();
       if (nuevo?.id != null) {
-        setHilo((prev) => ([
+        caso.setHilo((prev) => ([
           ...(prev ?? []),
           {
             id: nuevo.id,
@@ -307,41 +303,22 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
           },
         ]));
       } else {
-        await load();
+        await caso.recargar();
       }
     } catch (e) {
-      setError(e?.message ?? 'No se pudo enviar la respuesta.');
+      caso.setError(e?.message ?? 'No se pudo enviar la respuesta.');
     } finally {
       setSavingReply(false);
     }
   }
 
-  const nombreViajero = viajero?.nombre ?? '—';
-  function esDeAgente(m) {
-    if (m?.autor_rol) return m.autor_rol === 'agente';
-    if (nombreViajero !== '—') return m?.autor !== nombreViajero;
-    return false;
-  }
-
-  const reservaLinea = reserva
-    ? `${TIPO_RESERVA?.[reserva?.tipo] || reserva?.tipo || 'Reserva'} · ${reserva?.codigo ?? reserva?.id ?? '—'}`
-    : null;
-  const reservaRuta = reserva
-    ? (reserva?.hotel ?? [reserva?.origen, reserva?.destino].filter(Boolean).join(' → ') ?? '')
-    : '';
-
-  const sinAsignar = (asignado?.id ?? inc?.asignado?.id ?? null) == null
-    && !(asignado?.nombre ?? inc?.asignado?.nombre ?? asignadoNombreFallback());
-  function asignadoNombreFallback() {
-    return inc?.asignado_nombre ?? null;
-  }
   const asignadoId = asignado?.id ?? inc?.asignado?.id ?? inc?.asignado_id ?? null;
+  const nombreAsignado = asignado?.nombre ?? inc?.asignado_nombre ?? null;
+  const sinAsignar = asignadoId == null && !nombreAsignado;
   const esMio = asignadoId != null && yo?.id != null && String(asignadoId) === String(yo.id);
-  const nombreAsignado = asignado?.nombre ?? inc?.asignado?.nombre ?? asignadoNombreFallback()
-    ?? (inc?.asignado_nombre ?? null);
-  const sugerida = inc?.prioridad_sugerida ?? inc?.sugerida ?? null;
-  const motivoSugerida = inc?.prioridad_motivo ?? inc?.motivo_sugerida ?? null;
-  const nombresSeguidores = (seguidores ?? []).map((s) => s?.nombre ?? `#${s?.id ?? '—'}`).filter(Boolean);
+  const nombresSeguidores = caso.seguidores.map((s) => s?.nombre ?? `#${s?.id ?? '—'}`).filter(Boolean);
+  const sugerida = inc?.prioridad_sugerida ?? null;
+  const motivoSugerida = inc?.prioridad_motivo ?? null;
 
   return (
     <View style={styles.shell}>
@@ -355,286 +332,93 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
           <Text style={styles.backText}>← #{inc?.id ?? id}</Text>
         </Pressable>
         {inc?.estado && (
-          <Badge text={inc.estado === 'EnGestion' ? 'En gestión' : inc.estado} color={theme.status?.[inc.estado] || theme.colors.muted} />
+          <Badge text={etiquetaEstado(inc.estado)} color={theme.status?.[inc.estado] || theme.colors.muted} />
         )}
       </View>
-      <ScrollView
+
+      <FormScrollView
         style={styles.root}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + theme.spacing.lg }]}
+        bottomPadding={insets.bottom + theme.spacing.lg}
       >
         {avisoPrioridad && (
           <View style={styles.aviso} accessibilityRole="alert">
             <Text style={styles.avisoTexto}>Triá una prioridad antes de resolver.</Text>
           </View>
         )}
-        <ErrorBanner message={error} />
-        {error !== '' && (
-          <AppButton title="Reintentar" variant="ghost" onPress={load} />
+        <ErrorBanner message={caso.error} />
+        {caso.error !== '' && <AppButton title="Reintentar" variant="ghost" onPress={caso.recargar} />}
+        {!inc && caso.error === '' && <ActivityIndicator color={theme.colors.primary} />}
+        {!inc && caso.error !== '' && (
+          <EmptyState
+            title="No se pudo cargar el caso"
+            hint="Revisá tu conexión e intentá de nuevo."
+            actionTitle="Reintentar"
+            onAction={caso.recargar}
+          />
         )}
-        {!inc && error === '' && <ActivityIndicator color={theme.colors.primary} />}
-        {!inc && error !== '' && (
-          <EmptyState title="No se pudo cargar el caso" hint="Revisá tu conexión e intentá de nuevo." actionTitle="Reintentar" onAction={load} />
-        )}
+
+        {inc && <ResumenCaso inc={inc} />}
+
         {inc && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>#{inc.id} · {inc.titulo}</Text>
-            <View style={styles.row}>
-              <Badge text={inc.estado} color={theme.status?.[inc.estado] || theme.colors.muted} />
-              <Badge
-                text={inc.prioridad ? `Prioridad ${inc.prioridad}` : 'Sin triar'}
-                color={theme.priority?.[inc.prioridad] || theme.colors.muted}
-              />
-            </View>
-            <Text style={styles.muted}>{TIPO_INCIDENTE?.[inc.tipo] || inc.tipo} · {fmtFecha(inc.creado_at)}</Text>
-            <Text style={styles.body}>{inc.descripcion}</Text>
-          </View>
+          <PanelAccion
+            nombreAsignado={nombreAsignado}
+            esMio={esMio}
+            sinAsignar={sinAsignar}
+            siguiendo={siguiendo}
+            nombresSeguidores={nombresSeguidores}
+            savingAccion={savingAccion}
+            onReclamar={reclamar}
+            onLiberar={liberar}
+            onSeguir={alternarSeguir}
+            derivacion={{
+              abierto: derivando,
+              agentes,
+              elegido: agenteElegido,
+              motivo: motivoDerivar,
+              onAbrir: abrirDerivar,
+              onElegir: setAgenteElegido,
+              onMotivo: setMotivoDerivar,
+              onCancelar: cerrarDerivacion,
+              onConfirmar: confirmarDerivar,
+            }}
+          />
         )}
+
+        {inc && <PanelViajero viajero={viajero} reserva={reserva} />}
+
         {inc && (
-          <View style={styles.card}>
-            <Text style={styles.subtitle}>Acción</Text>
-            <View style={styles.asignadoBox}>
-              <Text style={styles.muted}>
-                {sinAsignar
-                  ? 'Nadie lo reclamó todavía'
-                  : esMio
-                    ? `Lo tenés vos${nombreAsignado ? ` (${nombreAsignado})` : ''}`
-                    : `Reclamado por ${nombreAsignado ?? 'otro agente'}`}
-              </Text>
-            </View>
-            {sinAsignar ? (
-              <AppButton title={savingAccion ? 'Cargando…' : 'Reclamar caso'} onPress={reclamar} />
-            ) : (
-              <View style={styles.row}>
-                {esMio && (
-                  <>
-                    <Pressable
-                      onPress={liberar}
-                      style={styles.secBtn}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Liberar caso ${inc?.id ?? id}`}
-                    >
-                      <Text style={styles.secTexto}>Liberar</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={abrirDerivar}
-                      style={styles.secBtn}
-                      accessibilityRole="button"
-                      accessibilityLabel="Derivar caso"
-                    >
-                      <Text style={styles.secTexto}>Derivar</Text>
-                    </Pressable>
-                  </>
-                )}
-              </View>
-            )}
-            <Pressable
-              onPress={alternarSeguir}
-              disabled={savingAccion}
-              style={[styles.secBtn, siguiendo && styles.secBtnOn]}
-              accessibilityRole="button"
-              accessibilityLabel={siguiendo ? 'Dejar de seguir caso' : 'Seguir caso'}
-            >
-              <Text style={[styles.secTexto, siguiendo && styles.secTextoOn]}>
-                {siguiendo ? 'Dejar de seguir' : 'Seguir'}
-              </Text>
-            </Pressable>
-            <Text style={styles.muted}>
-              {siguiendo
-                ? 'Lo seguís: aparece en tu pestaña Siguiendo.'
-                : 'Seguí el caso para verlo en tu pestaña Siguiendo. Puede seguirlo cualquiera, tenga o no el caso.'}
-            </Text>
-            {nombresSeguidores.length > 0 && (
-              <Text style={styles.muted}>Siguen: {nombresSeguidores.join(', ')}</Text>
-            )}
-            {mostrarDerivar && (
-              <View style={styles.derivarBox}>
-                <Text style={styles.body}>Elegí agente y confirmá.</Text>
-                {(agentes ?? []).length === 0 && (
-                  <Text style={styles.muted}>Sin lista de agentes (revisá conexión).</Text>
-                )}
-                {(agentes ?? []).map((a) => (
-                  <Pressable
-                    key={a?.id}
-                    onPress={() => setAgenteElegido(a?.id)}
-                    style={[styles.chip, String(agenteElegido) === String(a?.id) && styles.chipActive]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Derivar a ${a?.nombre ?? a?.id}`}
-                    accessibilityState={{ selected: String(agenteElegido) === String(a?.id) }}
-                  >
-                    <Text style={[styles.chipText, String(agenteElegido) === String(a?.id) && styles.chipTextActive]}>
-                      {a?.nombre ?? `#${a?.id}`} {a?.email ? `· ${a.email}` : ''}
-                    </Text>
-                  </Pressable>
-                ))}
-                <TextInput
-                  style={styles.area}
-                  value={motivoDerivar}
-                  onChangeText={(t) => setMotivoDerivar(t.slice(0, 500))}
-                  placeholder="Motivo (opcional)"
-                  placeholderTextColor={theme.colors.muted}
-                  multiline
-                  textAlignVertical="top"
-                />
-                <View style={styles.row}>
-                  <Pressable onPress={() => { setMostrarDerivar(false); setAgenteElegido(null); setMotivoDerivar(''); }} accessibilityRole="button" style={styles.linkBtn}>
-                    <Text style={styles.link}>Cancelar</Text>
-                  </Pressable>
-                  <Pressable onPress={confirmarDerivar} accessibilityRole="button" style={styles.linkBtn} accessibilityLabel="Confirmar derivación">
-                    <Text style={styles.link}>Confirmar</Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
-          </View>
+          <PanelTriaje
+            inc={inc}
+            sugerida={sugerida}
+            motivoSugerida={motivoSugerida}
+            savingPut={savingPut}
+            onPrioridad={(p) => put({ prioridad: p })}
+            onEstado={pedirCambioEstado}
+            reapertura={estadoPendiente === null ? null : {
+              estado: estadoPendiente,
+              motivo: motivoReapertura,
+              onMotivo: setMotivoReapertura,
+              onCancelar: () => { setEstadoPendiente(null); setMotivoReapertura(''); },
+              onConfirmar: confirmarReapertura,
+            }}
+          />
         )}
+
         {inc && (
-          <View style={styles.card}>
-            <Text style={styles.subtitle}>Viajero</Text>
-            <Text style={styles.body}>{viajero?.nombre ?? '—'}</Text>
-            <Text style={styles.muted}>{viajero?.email ?? '—'}</Text>
-            <Text style={[styles.subtitle, styles.mt]}>Reserva</Text>
-            {reserva ? (
-              <>
-                <Text style={styles.body}>{reservaLinea}</Text>
-                {!!reservaRuta && <Text style={styles.muted}>{reservaRuta}</Text>}
-              </>
-            ) : (
-              <Text style={styles.muted}>Sin reserva vinculada</Text>
-            )}
-          </View>
+          <PanelRespuesta
+            hilo={hilo}
+            mensaje={mensaje}
+            onMensaje={setMensaje}
+            savingReply={savingReply}
+            onResponder={responder}
+            nombreViajero={viajero?.nombre ?? null}
+          />
         )}
-        {inc && (
-          <>
-            <Text style={styles.label}>Prioridad</Text>
-            {sugerida && (
-              <Text style={styles.muted}>Sugerida: {sugerida}{motivoSugerida ? ` · ${motivoSugerida}` : ' por tipo'}</Text>
-            )}
-            <View style={styles.row}>
-              {['Baja', 'Alta', 'Critica'].map((p) => (
-                <Pressable
-                  key={p}
-                  onPress={() => put({ prioridad: p })}
-                  disabled={savingPut || inc.prioridad === p}
-                  style={[styles.chip, inc.prioridad === p && styles.chipActive]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Cambiar prioridad a ${p === 'Critica' ? 'Crítica' : p}`}
-                  accessibilityState={{ selected: inc.prioridad === p }}
-                >
-                  <Text style={[styles.chipText, inc.prioridad === p && styles.chipTextActive]}>{p === 'Critica' ? 'Crítica' : p}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={styles.label}>Estado</Text>
-            <View style={styles.row}>
-              {['Abierto', 'EnGestion', 'Resuelto'].map((s) => (
-                <Pressable
-                  key={s}
-                  onPress={() => pedirCambioEstado(s)}
-                  disabled={savingPut || inc.estado === s}
-                  style={[styles.chip, inc.estado === s && styles.chipActive]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Cambiar estado a ${s === 'EnGestion' ? 'En gestión' : s}`}
-                  accessibilityState={{ selected: inc.estado === s }}
-                >
-                  <Text style={[styles.chipText, inc.estado === s && styles.chipTextActive]}>{s === 'EnGestion' ? 'En gestión' : s}</Text>
-                </Pressable>
-              ))}
-            </View>
-            {estadoPendiente !== null && (
-              <View style={styles.reopenBox}>
-                <Text style={styles.body}>Reabrir como {estadoPendiente === 'EnGestion' ? 'En gestión' : estadoPendiente}. Escribí el motivo antes de confirmar.</Text>
-                <TextInput
-                  style={styles.area}
-                  value={motivoReapertura}
-                  onChangeText={(t) => setMotivoReapertura(t.slice(0, 500))}
-                  placeholder="Ej. El viajero avisó que el problema sigue."
-                  placeholderTextColor={theme.colors.muted}
-                  multiline
-                  textAlignVertical="top"
-                />
-                <View style={styles.row}>
-                  <Pressable onPress={() => { setEstadoPendiente(null); setMotivoReapertura(''); }} accessibilityRole="button" style={styles.linkBtn}>
-                    <Text style={styles.link}>Cancelar</Text>
-                  </Pressable>
-                  <Pressable onPress={confirmarReapertura} accessibilityRole="button" style={styles.linkBtn}>
-                    <Text style={styles.link}>Confirmar reapertura</Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
-            <Text style={styles.label}>Responder al viajero</Text>
-            <TextInput
-              style={styles.area} value={mensaje} onChangeText={(t) => setMensaje(t.slice(0, MAX_RESPUESTA))}
-              placeholder="Ej. Hablamos con la aerolínea: reprogramado mañana 08:00." placeholderTextColor={theme.colors.muted}
-              multiline numberOfLines={3} textAlignVertical="top" maxLength={MAX_RESPUESTA}
-            />
-            <Text style={styles.muted}>{mensaje.length}/{MAX_RESPUESTA}</Text>
-            <AppButton title="Enviar respuesta" onPress={responder} loading={savingReply} />
-            <Text style={styles.subtitle}>Hilo ({hilo.length})</Text>
-            {hilo.map((m) => {
-              const agente = esDeAgente(m);
-              return (
-                <View key={m?.id} style={[styles.threadRow, agente ? styles.rowRight : styles.rowLeft]}>
-                  <View style={[styles.bubble, agente ? styles.bubbleAgente : styles.bubbleViajero]}>
-                    <Text style={styles.muted}>{m?.autor ?? '—'} · {agente ? 'Agente' : 'Viajero'} · {fmtFecha(m?.creado_at)}</Text>
-                    <Text style={styles.body}>{m?.mensaje}</Text>
-                  </View>
-                </View>
-              );
-            })}
-            <Text style={styles.subtitle}>Historial</Text>
-            {historial === null && <Text style={styles.muted}>Sin historial</Text>}
-            {historial !== null && historial.length === 0 && <Text style={styles.muted}>Sin historial</Text>}
-            {(historial ?? []).map((h, idx) => (
-              <View key={h?.id ?? idx} style={styles.histRow}>
-                <Text style={styles.body}>{accionLegible(h?.accion)}</Text>
-                <Text style={styles.muted}>{h?.actor_nombre ?? '—'} · {fmtFecha(h?.creado_at)}</Text>
-                {!!h?.detalle && <Text style={styles.muted}>{h.detalle}</Text>}
-              </View>
-            ))}
-          </>
-        )}
-      </ScrollView>
+
+        {inc && <PanelHistorial historial={historial} />}
+      </FormScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: theme.colors.background },
-  sticky: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.sm, backgroundColor: theme.colors.background, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  backBtn: { minHeight: 44, justifyContent: 'center' },
-  backText: { color: theme.colors.primary, fontWeight: 'bold', fontSize: theme.type.subtitle },
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  content: { padding: theme.spacing.lg, gap: theme.spacing.md },
-  card: { backgroundColor: theme.colors.card, borderRadius: theme.radius.lg, padding: theme.spacing.md, gap: 6 },
-  cardTitle: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text },
-  label: { fontSize: theme.type.caption, color: theme.colors.text, fontWeight: 'bold' },
-  subtitle: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text },
-  mt: { marginTop: theme.spacing.sm },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm, alignItems: 'center' },
-  chip: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 999, paddingHorizontal: theme.spacing.md, minHeight: 44, justifyContent: 'center', backgroundColor: theme.colors.card, opacity: 1 },
-  chipActive: { borderColor: theme.colors.primary, backgroundColor: '#EDE7FB' },
-  chipText: { color: theme.colors.text },
-  chipTextActive: { color: theme.colors.primary, fontWeight: 'bold' },
-  secBtn: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, minHeight: 44, paddingHorizontal: theme.spacing.md, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.card },
-  secBtnOn: { borderColor: theme.colors.primary, backgroundColor: '#EDE7FB' },
-  secTexto: { color: theme.colors.primary, fontWeight: 'bold' },
-  secTextoOn: { color: theme.colors.primary },
-  asignadoBox: { backgroundColor: theme.colors.card, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm },
-  body: { fontSize: theme.type.body, color: theme.colors.text },
-  muted: { fontSize: theme.type.caption, color: theme.colors.muted },
-  area: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.card, minHeight: 90, padding: theme.spacing.sm, fontSize: theme.type.body, color: theme.colors.text },
-  threadRow: { flexDirection: 'row' },
-  rowRight: { justifyContent: 'flex-end' },
-  rowLeft: { justifyContent: 'flex-start' },
-  bubble: { maxWidth: '85%', borderRadius: theme.radius.md, padding: theme.spacing.md, gap: 4 },
-  bubbleAgente: { backgroundColor: '#EDE7FB', alignSelf: 'flex-end' },
-  bubbleViajero: { backgroundColor: '#EDEFF3', alignSelf: 'flex-start' },
-  reopenBox: { backgroundColor: theme.colors.card, borderRadius: theme.radius.md, padding: theme.spacing.md, gap: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border },
-  derivarBox: { gap: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, padding: theme.spacing.md },
-  histRow: { backgroundColor: theme.colors.card, borderRadius: theme.radius.md, padding: theme.spacing.md, gap: 2 },
-  aviso: { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: theme.colors.warning, borderRadius: theme.radius.md, padding: theme.spacing.sm },
-  avisoTexto: { color: theme.colors.text, fontSize: theme.type.caption, fontWeight: 'bold' },
-  linkBtn: { minHeight: 44, justifyContent: 'center' },
-  link: { color: theme.colors.primary, fontWeight: 'bold' },
-});

@@ -1,12 +1,12 @@
-// Cola simplificada: tabs [Activos | Sin triar | Míos | Resueltos], filtros colapsados,
-// sort [Urgentes | Antiguos | Recientes], 3 chips resumen, cards con Reclamar.
+// Cola del agente: pestañas (activos, sin triar, míos, siguiendo, resueltos),
+// filtros, orden y cards con reclamar/seguir.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
-import { AppButton, Badge, EmptyState, ErrorBanner } from '../../shared/components';
-import { TIPO_INCIDENTE } from '../../shared/format';
+import { Badge, EmptyState, ErrorBanner } from '../../shared/components';
+import { etiquetaPrioridad, etiquetaTipo } from '../../shared/format';
 
 const TABS = ['Activos', 'Sin triar', 'Míos', 'Siguiendo', 'Resueltos'];
 const SORTS = [
@@ -16,49 +16,33 @@ const SORTS = [
 ];
 const TIPOS = ['Vuelo_cancelado', 'Vuelo_retrasado', 'Hotel_sin_reserva', 'Equipaje', 'Cobro_indebido', 'Fraude', 'Otro'];
 const PRIO_FILTRO = ['Todas', 'Baja', 'Alta', 'Critica'];
-const LIMIT = 20;
+const LIMITE = 20;
 const ORDEN_PRIORIDAD = { Critica: 0, Alta: 1, Baja: 2 };
-
-function etiquetaTipo(t) {
-  return TIPO_INCIDENTE?.[t] ?? String(t ?? '—').replace(/_/g, ' ');
-}
 
 function haceTiempo(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d?.getTime?.())) return '—';
-  const diffMs = Date.now() - d.getTime();
-  if (diffMs < 0) return 'ahora mismo';
-  const min = Math.floor(diffMs / 60000);
-  if (min < 1) return 'hace un momento';
-  if (min < 60) return `hace ${min} min`;
-  const hs = Math.floor(min / 60);
-  if (hs < 48) return `hace ${hs} h`;
-  const dias = Math.floor(hs / 24);
-  return `hace ${dias} d`;
+  const minutos = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (minutos < 1) return 'hace un momento';
+  if (minutos < 60) return `hace ${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 48) return `hace ${horas} h`;
+  return `hace ${Math.floor(horas / 24)} d`;
 }
 
-function slaInfo(item) {
-  const iso = item?.sla_vence_at ?? null;
+function infoSla(caso) {
+  const iso = caso?.sla_vence_at ?? null;
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d?.getTime?.())) return null;
-  const diffMs = d.getTime() - Date.now();
-  const vencido = diffMs < 0;
-  const absHs = Math.max(0, Math.floor(Math.abs(diffMs) / 3600000));
-  const absDias = Math.floor(absHs / 24);
-  const resto = absDias >= 2 ? `hace ${absDias} d` : absHs < 1 ? 'menos de 1 h' : `${absHs} h`;
-  if (vencido) return { texto: absHs < 1 ? 'Vencido' : `Vencido ${resto}`, vencido: true };
-  const falta = absDias >= 2 ? `${absDias} d` : `${absHs} h`;
-  return { texto: `Vence en ${falta}`, vencido: false };
-}
-
-function asignadoId(item) {
-  return item?.asignado?.id ?? item?.asignado_id ?? item?.asignado_a ?? item?.agente_id ?? null;
-}
-
-function asignadoNombre(item) {
-  return item?.asignado?.nombre ?? item?.asignado_nombre ?? null;
+  const ms = d.getTime() - Date.now();
+  const vencido = ms < 0;
+  const horas = Math.floor(Math.abs(ms) / 3600000);
+  const dias = Math.floor(horas / 24);
+  const resto = dias >= 2 ? `hace ${dias} d` : horas < 1 ? 'menos de 1 h' : `${horas} h`;
+  if (vencido) return { texto: horas < 1 ? 'Vencido' : `Vencido ${resto}`, vencido: true };
+  return { texto: `Vence en ${dias >= 2 ? `${dias} d` : horas < 1 ? 'menos de 1 h' : `${horas} h`}`, vencido: false };
 }
 
 function iniciales(nombre) {
@@ -69,10 +53,80 @@ function iniciales(nombre) {
   return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
 }
 
-function etiquetaPrioridad(p) {
-  if (!p) return 'Sin triar';
-  if (p === 'Critica') return 'Crítica';
-  return p;
+function idAsignado(caso) {
+  return caso?.asignado?.id ?? caso?.asignado_id ?? caso?.asignado_a ?? caso?.agente_id ?? null;
+}
+
+function nombreAsignado(caso) {
+  return caso?.asignado?.nombre ?? caso?.asignado_nombre ?? null;
+}
+
+function CasoCard({ caso, yo, reclamando, siguiendoId, onOpen, onReclamar, onSeguir }) {
+  const sla = infoSla(caso);
+  const nombre = nombreAsignado(caso);
+  const sinAsignar = idAsignado(caso) == null && !nombre;
+  const loSigo = caso?.siguiendo === true;
+  const seguidores = caso?.seguidores_count ?? 0;
+  const esMio = yo?.id != null && idAsignado(caso) != null && String(idAsignado(caso)) === String(yo.id);
+  const respuestas = caso?.respuestas_n ?? caso?.respuestas_count ?? caso?.conteo_respuestas ?? null;
+
+  return (
+    <Pressable
+      onPress={() => onOpen?.(caso?.id)}
+      style={styles.card}
+      accessibilityRole="button"
+      accessibilityLabel={`Abrir caso ${caso?.id ?? ''} ${caso?.titulo ?? ''}`}
+    >
+      <Text style={styles.cardTitle}>#{caso?.id ?? '—'} · {caso?.titulo ?? 'Sin título'}</Text>
+      {!!caso?.descripcion && <Text style={styles.body} numberOfLines={2}>{caso.descripcion}</Text>}
+      <Text style={styles.muted}>
+        {haceTiempo(caso?.creado_at ?? caso?.actualizado_at)}
+        {sla ? ` · ${sla.texto}` : ''}
+        {respuestas != null ? ` · ${respuestas} resp.` : ''}
+      </Text>
+      {sla?.vencido && <Text style={styles.vencido}>Vencido · atención inmediata</Text>}
+
+      <View style={styles.row}>
+        <Badge text={caso?.estado === 'EnGestion' ? 'En gestión' : (caso?.estado ?? '—')} color={theme.status?.[caso?.estado] || theme.colors.muted} />
+        <Badge text={etiquetaPrioridad(caso?.prioridad)} color={theme.priority?.[caso?.prioridad] || theme.colors.muted} />
+        {nombre ? (
+          <Badge text={esMio ? 'Lo tenés vos' : `Reclamado por ${nombre}`} color={theme.colors.primary} />
+        ) : (
+          <Badge text="Sin reclamar" color={theme.colors.muted} />
+        )}
+        {loSigo && <Badge text="Siguiendo" color={theme.colors.primary} />}
+        {!loSigo && seguidores > 0 && <Badge text={`${seguidores} sig.`} color={theme.colors.muted} />}
+        <View style={styles.asignado} accessibilityLabel={nombre ? `Asignado a ${nombre}` : 'Sin asignar'}>
+          <Text style={styles.asignadoTexto}>{iniciales(nombre) ?? 'Sin asignar'}</Text>
+        </View>
+      </View>
+
+      <View style={styles.accionesFila}>
+        {sinAsignar && (
+          <Pressable
+            onPress={() => onReclamar(caso)}
+            disabled={reclamando === caso?.id}
+            style={styles.reclamarBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Reclamar caso ${caso?.id ?? ''}`}
+          >
+            <Text style={styles.reclamarTexto}>{reclamando === caso?.id ? 'Reclamando…' : 'Reclamar'}</Text>
+          </Pressable>
+        )}
+        <Pressable
+          onPress={() => onSeguir(caso)}
+          disabled={siguiendoId === caso?.id}
+          style={[styles.reclamarBtn, loSigo && styles.reclamarBtnOn]}
+          accessibilityRole="button"
+          accessibilityLabel={loSigo ? `Dejar de seguir caso ${caso?.id ?? ''}` : `Seguir caso ${caso?.id ?? ''}`}
+        >
+          <Text style={[styles.reclamarTexto, loSigo && styles.reclamarTextoOn]}>
+            {siguiendoId === caso?.id ? 'Actualizando…' : (loSigo ? 'Dejar de seguir' : 'Seguir')}
+          </Text>
+        </Pressable>
+      </View>
+    </Pressable>
+  );
 }
 
 export function ColaScreen({ onOpen, refreshKey, user }) {
@@ -92,124 +146,123 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
   const [cargando, setCargando] = useState(true);
   const [reclamando, setReclamando] = useState(null);
   const [siguiendoId, setSiguiendoId] = useState(null);
-  const dataRef = useRef(null);
-  dataRef.current = items;
+  const cargadoUnaVez = useRef(false);
 
-  const totalPages = Math.max(1, Math.ceil((total || 0) / LIMIT));
-  const paginaSegura = Math.min(page, totalPages);
+  const totalPaginas = Math.max(1, Math.ceil((total || 0) / LIMITE));
+  const pagina = Math.min(page, totalPaginas);
 
-  const loadYo = useCallback(async () => {
+  const cargarYo = useCallback(async () => {
     if (user?.id != null) { setYo(user); return user; }
     try {
       const r = await api.me();
       const u = r?.user ?? r?.data?.user ?? r?.data ?? null;
       if (u?.id != null) setYo(u);
       return u;
-    } catch (e) { return yo; }
-  }, [user]);
+    } catch (e) {
+      return yo;
+    }
+  }, [user, yo]);
 
-  const load = useCallback(async (p) => {
+  const cargar = useCallback(async (paginaPedida) => {
     setError('');
-    const primera = dataRef.current === null;
-    if (primera) setCargando(true);
+    if (!cargadoUnaVez.current) setCargando(true);
     else setRefreshing(true);
     try {
-      const yoActual = await loadYo().catch(() => yo);
+      const yoActual = await cargarYo().catch(() => yo);
       const yoId = yoActual?.id ?? yo?.id ?? user?.id ?? null;
       const ordenQuery = orden === 'urgencia' ? 'asc' : orden;
-      const baseParams = `orden=${ordenQuery}&page=${p}&limit=${LIMIT}`
+      const params = `orden=${ordenQuery}&page=${paginaPedida}&limit=${LIMITE}`
         + (prioFiltro !== 'Todas' ? `&prioridad=${prioFiltro}` : '')
         + (tipoFiltro !== 'Todos' ? `&tipo=${tipoFiltro}` : '');
+
       let lista = [];
-      let tot = 0;
+      let totalActual = 0;
 
       if (tab === 'Míos' || tab === 'Siguiendo') {
-        // Míos = casos que reclamé. Siguiendo = los que sigo y no son míos.
         const vista = tab === 'Míos' ? 'mios' : 'siguiendo';
         try {
-          const r = await api.get(`/admin/mi-cola?vista=${vista}&${baseParams}`);
-          lista = r?.data ?? r?.items ?? [];
-          tot = r?.total ?? lista?.length ?? 0;
+          const r = await api.get(`/admin/mi-cola?vista=${vista}&${params}`);
+          lista = r?.data ?? [];
+          totalActual = r?.total ?? lista.length;
         } catch (e) {
-          // Fallback: cola global filtrada en cliente.
-          const r = await api.get(`/admin/incidentes?${baseParams}`);
+          // Si el backend no expone la vista, se filtra la cola global en el cliente.
+          const r = await api.get(`/admin/incidentes?${params}`);
           const todas = r?.data ?? [];
-          lista = (todas ?? []).filter((i) => {
-            const mio = yoId != null && String(asignadoId(i) ?? '') === String(yoId ?? '');
-            const sigo = i?.siguiendo === true;
-            return vista === 'mios' ? mio : (sigo && !mio);
+          lista = todas.filter((c) => {
+            const mio = yoId != null && String(idAsignado(c) ?? '') === String(yoId);
+            return vista === 'mios' ? mio : (c?.siguiendo === true && !mio);
           });
-          tot = lista?.length ?? 0;
+          totalActual = lista.length;
         }
       } else {
-        let q = `/admin/incidentes?${baseParams}`;
-        if (tab === 'Resueltos') q += '&estado=Resuelto';
-        const r = await api.get(q);
+        let url = `/admin/incidentes?${params}`;
+        if (tab === 'Resueltos') url += '&estado=Resuelto';
+        const r = await api.get(url);
         const todas = r?.data ?? [];
-        const totBackend = r?.total ?? todas?.length ?? 0;
+        totalActual = r?.total ?? todas.length;
         if (tab === 'Activos') {
-          lista = (todas ?? []).filter((i) => ['Abierto', 'EnGestion'].includes(i?.estado));
-          // Si backend ya filtró o devolvió solo activos, no vaciar por filtro cliente.
-          if (lista.length === 0 && (todas ?? []).length > 0) lista = todas;
-          tot = totBackend;
+          lista = todas.filter((c) => ['Abierto', 'EnGestion'].includes(c?.estado));
+          if (lista.length === 0 && todas.length > 0) lista = todas;
         } else if (tab === 'Sin triar') {
-          lista = (todas ?? []).filter((i) => (i?.prioridad ?? null) === null);
-          if (lista.length === 0 && (todas ?? []).length > 0 && prioFiltro !== 'Todas') lista = todas;
-          tot = lista?.length ?? 0;
+          lista = todas.filter((c) => (c?.prioridad ?? null) === null);
+          if (lista.length === 0 && todas.length > 0 && prioFiltro !== 'Todas') lista = todas;
         } else {
           lista = todas;
-          tot = totBackend;
         }
       }
 
-      // Filtros avanzados también en cliente por si backend no filtra.
-      if (tipoFiltro !== 'Todos') lista = (lista ?? []).filter((i) => i?.tipo === tipoFiltro);
-      if (prioFiltro !== 'Todas') lista = (lista ?? []).filter((i) => i?.prioridad === prioFiltro);
+      // Los filtros fines se aplican tambien en el cliente por si el backend no filtra.
+      if (tipoFiltro !== 'Todos') lista = lista.filter((c) => c?.tipo === tipoFiltro);
+      if (prioFiltro !== 'Todas') lista = lista.filter((c) => c?.prioridad === prioFiltro);
 
-      setItems(lista ?? []);
-      setTotal(tot ?? 0);
-
-      try {
-        const res = await api.get('/admin/incidentes/resumen');
-        const d = res?.data ?? res ?? null;
-        if (d && !Array.isArray(d)) {
-          setConteos({
-            sinTriar: d?.sin_triar ?? d?.sinTriar ?? null,
-            vencidos: d?.vencidos ?? null,
-            mios: d?.mios ?? d?.mis ?? null,
-          });
-        } else {
-          setConteos((prev) => ({
-            sinTriar: prev.sinTriar ?? (lista ?? []).filter((i) => (i?.prioridad ?? null) === null).length,
-            vencidos: prev.vencidos ?? (lista ?? []).filter((i) => (slaInfo(i)?.vencido ?? false)).length,
-            mios: prev.mios ?? (yoId != null ? (lista ?? []).filter((i) => String(asignadoId(i) ?? '') === String(yoId)).length : null),
-          }));
-        }
-      } catch (e) { /* resumen opcional */ }
+      setItems(lista);
+      setTotal(totalActual);
+      await cargarResumen(lista, yoId);
     } catch (e) {
       setError(e?.message ?? 'No se pudo cargar la cola.');
     } finally {
+      cargadoUnaVez.current = true;
       setCargando(false);
       setRefreshing(false);
     }
-  }, [tab, orden, tipoFiltro, prioFiltro, loadYo]);
+  }, [tab, orden, tipoFiltro, prioFiltro, cargarYo, yo, user]);
 
-  useEffect(() => { load(paginaSegura); }, [load, paginaSegura, refreshKey]);
+  async function cargarResumen(lista, yoId) {
+    try {
+      const r = await api.get('/admin/incidentes/resumen');
+      const d = r?.data ?? r ?? null;
+      if (d && !Array.isArray(d)) {
+        setConteos({
+          sinTriar: d?.sin_triar ?? d?.sinTriar ?? null,
+          vencidos: d?.vencidos ?? null,
+          mios: d?.mios ?? d?.mis ?? null,
+        });
+      } else {
+        setConteos({
+          sinTriar: lista.filter((c) => (c?.prioridad ?? null) === null).length,
+          vencidos: lista.filter((c) => infoSla(c)?.vencido).length,
+          mios: yoId != null ? lista.filter((c) => String(idAsignado(c) ?? '') === String(yoId)).length : null,
+        });
+      }
+    } catch (e) { /* el resumen es opcional */ }
+  }
 
-  function cambiarTab(t) {
-    if (t === tab) return;
-    setTab(t);
+  useEffect(() => { cargar(pagina); }, [cargar, pagina, refreshKey]);
+
+  function cambiarTab(nueva) {
+    if (nueva === tab) return;
+    setTab(nueva);
     setPage(1);
   }
 
-  function irChip(cual) {
-    if (cual === 'sinTriar') cambiarTab('Sin triar');
-    else if (cual === 'mios') cambiarTab('Míos');
+  function irAResumen(cual) {
+    if (cual === 'mios') cambiarTab('Míos');
+    else if (cual === 'sinTriar') cambiarTab('Sin triar');
     else cambiarTab('Activos');
   }
 
-  async function reclamar(item) {
-    const id = item?.id;
+  async function reclamar(caso) {
+    const id = caso?.id;
     if (id == null || reclamando) return;
     Alert.alert('Reclamar caso', `Te asignás el caso #${id}?`, [
       { text: 'Cancelar', style: 'cancel' },
@@ -219,12 +272,11 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
           setReclamando(id);
           try {
             await api.post(`/admin/incidentes/${id}/claim`, {});
-            await load(paginaSegura);
+            await cargar(pagina);
           } catch (e) {
-            const msg = e?.status === 409
+            setError(e?.status === 409
               ? 'Ya lo reclamó otro agente. Actualizá la cola.'
-              : (e?.message ?? 'No se pudo reclamar.');
-            setError(msg);
+              : (e?.message ?? 'No se pudo reclamar.'));
           } finally {
             setReclamando(null);
           }
@@ -233,19 +285,18 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
     ]);
   }
 
-  // Seguir / dejar de seguir desde la lista (cualquier agente puede seguir un caso).
-  async function alternarSeguir(item) {
-    const id = item?.id;
+  async function seguir(caso) {
+    const id = caso?.id;
     if (id == null || siguiendoId != null) return;
     setSiguiendoId(id);
     setError('');
     try {
-      if (item?.siguiendo === true) {
+      if (caso?.siguiendo === true) {
         await api.del(`/admin/incidentes/${id}/seguir`);
       } else {
         await api.post(`/admin/incidentes/${id}/seguir`, {});
       }
-      await load(paginaSegura);
+      await cargar(pagina);
     } catch (e) {
       setError(e?.message ?? 'No se pudo actualizar el seguimiento.');
     } finally {
@@ -253,40 +304,38 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
     }
   }
 
-  const visible = useMemo(() => {    const lista = [...(items ?? [])];
+  const visibles = useMemo(() => {
+    const lista = [...(items ?? [])];
+    const porFecha = (a, b) => (new Date(a?.creado_at ?? 0).getTime() || 0) - (new Date(b?.creado_at ?? 0).getTime() || 0);
     if (orden === 'urgencia') {
       lista.sort((a, b) => {
-        const va = slaInfo(a)?.vencido ? 0 : 1;
-        const vb = slaInfo(b)?.vencido ? 0 : 1;
+        const va = infoSla(a)?.vencido ? 0 : 1;
+        const vb = infoSla(b)?.vencido ? 0 : 1;
         if (va !== vb) return va - vb;
         const pa = ORDEN_PRIORIDAD[a?.prioridad] ?? 9;
         const pb = ORDEN_PRIORIDAD[b?.prioridad] ?? 9;
         if (pa !== pb) return pa - pb;
-        const fa = new Date(a?.creado_at ?? 0).getTime() || 0;
-        const fb = new Date(b?.creado_at ?? 0).getTime() || 0;
-        return fa - fb;
+        return porFecha(a, b);
       });
     } else {
-      const dir = orden === 'asc' ? 1 : -1;
+      const signo = orden === 'asc' ? 1 : -1;
       lista.sort((a, b) => {
         const pa = ORDEN_PRIORIDAD[a?.prioridad] ?? 9;
         const pb = ORDEN_PRIORIDAD[b?.prioridad] ?? 9;
         if (pa !== pb) return pa - pb;
-        const fa = new Date(a?.creado_at ?? 0).getTime() || 0;
-        const fb = new Date(b?.creado_at ?? 0).getTime() || 0;
-        return (fa - fb) * dir;
+        return porFecha(a, b) * signo;
       });
     }
     return lista;
   }, [items, orden]);
 
-  const esUltima = paginaSegura >= totalPages;
+  const esUltima = pagina >= totalPaginas;
 
   return (
     <ScrollView
       style={styles.root}
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + theme.spacing.lg }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(paginaSegura)} colors={[theme.colors.primary]} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => cargar(pagina)} colors={[theme.colors.primary]} />}
     >
       <Text style={styles.title}>Cola ({total})</Text>
 
@@ -298,7 +347,7 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
         ].map((c) => (
           <Pressable
             key={c.id}
-            onPress={() => irChip(c.id)}
+            onPress={() => irAResumen(c.id)}
             style={styles.chipGrande}
             accessibilityRole="button"
             accessibilityLabel={`Ver ${c.label} ${c.n ?? ''}`}
@@ -310,21 +359,18 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
       </View>
 
       <View style={styles.tabs} accessibilityRole="tablist" accessibilityLabel="Secciones de la cola">
-        {TABS.map((t) => {
-          const activo = tab === t;
-          return (
-            <Pressable
-              key={t}
-              onPress={() => cambiarTab(t)}
-              style={[styles.tab, activo && styles.tabActivo]}
-              accessibilityRole="tab"
-              accessibilityLabel={`Sección ${t}`}
-              accessibilityState={{ selected: activo }}
-            >
-              <Text style={[styles.tabTexto, activo && styles.tabTextoActivo]}>{t}</Text>
-            </Pressable>
-          );
-        })}
+        {TABS.map((t) => (
+          <Pressable
+            key={t}
+            onPress={() => cambiarTab(t)}
+            style={[styles.tab, tab === t && styles.tabActivo]}
+            accessibilityRole="tab"
+            accessibilityLabel={`Sección ${t}`}
+            accessibilityState={{ selected: tab === t }}
+          >
+            <Text style={[styles.tabTexto, tab === t && styles.tabTextoActivo]}>{t}</Text>
+          </Pressable>
+        ))}
       </View>
 
       <Pressable
@@ -336,6 +382,7 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
       >
         <Text style={styles.filtrosTexto}>Filtros {filtrosAbiertos ? '▾' : '▸'}</Text>
       </Pressable>
+
       {filtrosAbiertos && (
         <View style={styles.filtrosBox}>
           <Text style={styles.label}>Tipo</Text>
@@ -379,10 +426,10 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
         {SORTS.map((s) => (
           <Pressable
             key={s.id}
-            onPress={() => { if (s.id !== orden) { setOrden(s.id); setPage(1); } }}
+            onPress={() => setOrden(s.id)}
             style={[styles.segBtn, orden === s.id && styles.segActive]}
             accessibilityRole="radio"
-            accessibilityLabel={`Ordenar ${s.label.toLowerCase()}`}
+            accessibilityLabel={`Ordenar por ${s.label}`}
             accessibilityState={{ selected: orden === s.id }}
           >
             <Text style={[styles.segText, orden === s.id && styles.segTextActive]}>{s.label}</Text>
@@ -391,97 +438,41 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
       </View>
 
       <ErrorBanner message={error} />
-      {error !== '' && <AppButton title="Reintentar" variant="ghost" onPress={() => load(paginaSegura)} />}
       {cargando && items === null && error === '' && <ActivityIndicator color={theme.colors.primary} />}
-      {items !== null && visible.length === 0 && !cargando && error === '' && (
+      {items !== null && visibles.length === 0 && !cargando && error === '' && (
         <EmptyState title="Cola vacía" hint="No hay casos en esta sección." />
       )}
 
-      {visible.map((i) => {
-        const sla = slaInfo(i);
-        const nombre = asignadoNombre(i);
-        const ini = iniciales(nombre);
-        const sinAsignar = asignadoId(i) == null && !nombre;
-        const respuestasN = i?.respuestas_n ?? i?.respuestas_count ?? i?.conteo_respuestas ?? null;
-        const sigo = i?.siguiendo === true;
-        const seguidoresN = i?.seguidores_count ?? 0;
-        const esMio = yo?.id != null && asignadoId(i) != null && String(asignadoId(i)) === String(yo.id);
-        return (
-          <Pressable
-            key={i?.id}
-            onPress={() => onOpen?.(i?.id)}
-            style={styles.card}
-            accessibilityRole="button"
-            accessibilityLabel={`Abrir caso ${i?.id ?? ''} ${i?.titulo ?? ''}`}
-          >
-            <Text style={styles.cardTitle}>#{i?.id ?? '—'} · {i?.titulo ?? 'Sin título'}</Text>
-            {!!i?.descripcion && <Text style={styles.body} numberOfLines={2}>{i.descripcion}</Text>}
-            <Text style={styles.muted}>
-              {haceTiempo(i?.creado_at ?? i?.actualizado_at)}
-              {sla ? ` · ${sla.texto}` : ''}
-              {respuestasN != null ? ` · ${respuestasN} resp.` : ''}
-            </Text>
-            {sla?.vencido && <Text style={styles.vencido}>Vencido · atención inmediata</Text>}
-            <View style={styles.row}>
-              <Badge text={i?.estado === 'EnGestion' ? 'En gestión' : (i?.estado ?? '—')} color={theme.status?.[i?.estado] || theme.colors.muted} />
-              <Badge text={etiquetaPrioridad(i?.prioridad)} color={theme.priority?.[i?.prioridad] || theme.colors.muted} />
-              {nombre ? (
-                <Badge
-                  text={esMio ? 'Lo tenés vos' : `Reclamado por ${nombre}`}
-                  color={theme.colors.primary}
-                />
-              ) : (
-                <Badge text="Sin reclamar" color={theme.colors.muted} />
-              )}
-              {sigo && <Badge text="Siguiendo" color={theme.colors.primary} />}
-              {!sigo && seguidoresN > 0 && <Badge text={`${seguidoresN} sig.`} color={theme.colors.muted} />}
-              <View style={styles.asignado} accessibilityLabel={nombre ? `Asignado a ${nombre}` : 'Sin asignar'}>
-                <Text style={styles.asignadoTexto}>{ini ?? 'Sin asignar'}</Text>
-              </View>
-            </View>
-            <View style={styles.accionesFila}>
-              {sinAsignar && (
-                <Pressable
-                  onPress={() => reclamar(i)}
-                  disabled={reclamando === i?.id}
-                  style={styles.reclamarBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Reclamar caso ${i?.id ?? ''}`}
-                >
-                  <Text style={styles.reclamarTexto}>{reclamando === i?.id ? 'Reclamando…' : 'Reclamar'}</Text>
-                </Pressable>
-              )}
-              <Pressable
-                onPress={() => alternarSeguir(i)}
-                disabled={siguiendoId === i?.id}
-                style={[styles.reclamarBtn, sigo && styles.reclamarBtnOn]}
-                accessibilityRole="button"
-                accessibilityLabel={sigo ? `Dejar de seguir caso ${i?.id ?? ''}` : `Seguir caso ${i?.id ?? ''}`}
-              >
-                <Text style={[styles.reclamarTexto, sigo && styles.reclamarTextoOn]}>
-                  {siguiendoId === i?.id ? 'Actualizando…' : (sigo ? 'Dejar de seguir' : 'Seguir')}
-                </Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        );
-      })}
+      {visibles.map((caso) => (
+        <CasoCard
+          key={caso?.id}
+          caso={caso}
+          yo={yo}
+          reclamando={reclamando}
+          siguiendoId={siguiendoId}
+          onOpen={onOpen}
+          onReclamar={reclamar}
+          onSeguir={seguir}
+        />
+      ))}
 
-      {items !== null && visible.length > 0 && (
+      {items !== null && visibles.length > 0 && (
         <View style={styles.rowBetween}>
           <Pressable
-            onPress={() => setPage(Math.max(1, paginaSegura - 1))}
-            disabled={paginaSegura <= 1}
+            onPress={() => setPage(Math.max(1, pagina - 1))}
+            disabled={pagina <= 1}
+            style={styles.linkBtn}
             accessibilityRole="button"
             accessibilityLabel="Ir a página anterior"
-            accessibilityState={{ disabled: paginaSegura <= 1 }}
+            accessibilityState={{ disabled: pagina <= 1 }}
           >
-            <Text style={[styles.link, paginaSegura <= 1 && styles.dim]}>Anterior</Text>
+            <Text style={[styles.link, pagina <= 1 && styles.dim]}>Anterior</Text>
           </Pressable>
-          <Text style={styles.muted}>Página {paginaSegura} de {totalPages}</Text>
+          <Text style={styles.muted}>Página {pagina} de {totalPaginas}</Text>
           <Pressable
-            onPress={() => setPage(Math.min(totalPages, paginaSegura + 1))}
+            onPress={() => setPage(Math.min(totalPaginas, pagina + 1))}
             disabled={esUltima}
+            style={styles.linkBtn}
             accessibilityRole="button"
             accessibilityLabel="Ir a página siguiente"
             accessibilityState={{ disabled: esUltima }}
@@ -522,6 +513,7 @@ const styles = StyleSheet.create({
   segActive: { backgroundColor: theme.colors.primary },
   segText: { color: theme.colors.text, fontSize: theme.type.caption, fontWeight: 'bold' },
   segTextActive: { color: '#fff' },
+  linkBtn: { minHeight: 44, justifyContent: 'center' },
   link: { color: theme.colors.primary, fontWeight: 'bold' },
   dim: { opacity: 0.4 },
   card: { backgroundColor: theme.colors.card, borderRadius: theme.radius.lg, padding: theme.spacing.md, gap: 6 },
@@ -531,9 +523,9 @@ const styles = StyleSheet.create({
   vencido: { color: theme.colors.critical, fontWeight: 'bold', fontSize: theme.type.caption },
   asignado: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 999, paddingHorizontal: theme.spacing.sm, paddingVertical: 4 },
   asignadoTexto: { fontSize: theme.type.caption, color: theme.colors.text, fontWeight: 'bold' },
+  accionesFila: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm, alignItems: 'center' },
   reclamarBtn: { backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4, paddingHorizontal: theme.spacing.md },
   reclamarTexto: { color: '#fff', fontWeight: 'bold' },
-  accionesFila: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm, alignItems: 'center' },
   reclamarBtnOn: { backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.primary },
   reclamarTextoOn: { color: theme.colors.primary },
 });

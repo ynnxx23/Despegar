@@ -1,9 +1,9 @@
 // Login viajero: valida inline, muestra error comprensible, feedback de carga.
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
-import { api, API_HOST } from '../../shared/api';
-import { AppButton, AppInput, ErrorBanner } from '../../shared/components';
+import { api } from '../../shared/api';
+import { AppButton, AppInput, ErrorBanner, FormScrollView } from '../../shared/components';
 
 export function LoginScreen({ onSuccess, goRegister }) {
   const [email, setEmail] = useState('');
@@ -11,18 +11,15 @@ export function LoginScreen({ onSuccess, goRegister }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiOk, setApiOk] = useState(null);
-  const [apiError, setApiError] = useState('');
   const [probando, setProbando] = useState(false);
 
   const probar = useCallback(async () => {
     setProbando(true);
-    setApiError('');
     try {
       await api.health();
       setApiOk(true);
     } catch (e) {
       setApiOk(false);
-      setApiError(e?.message ?? 'Sin conexión con la API.');
     } finally {
       setProbando(false);
     }
@@ -48,25 +45,26 @@ export function LoginScreen({ onSuccess, goRegister }) {
   }
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
+    <FormScrollView style={styles.flex} contentContainerStyle={styles.root} bottomPadding={theme.spacing.lg}>
       <Text style={styles.title}>Despegar · Ayuda al Viajero</Text>
       <Text style={styles.sub}>Tus viajes y respuestas en un solo lugar.</Text>
       <View style={styles.estado}>
         <View style={[styles.punto, apiOk === true && styles.puntoOk, apiOk === false && styles.puntoFail]} />
         <Text style={styles.estadoTexto}>
-          {apiOk === null ? 'Conectando…' : apiOk ? 'Servicio disponible' : 'Sin conexión'}
+          {apiOk === null ? 'Conectando…' : apiOk ? 'Conectado' : 'Sin conexión'}
         </Text>
-        <Text style={styles.host}>API: {API_HOST}</Text>
+        {apiOk === false && (
+          <Pressable onPress={probar} accessibilityRole="button" hitSlop={8} style={styles.reintentar}>
+            <Text style={styles.reintentarTexto}>{probando ? 'Reintentando…' : 'Reintentar'}</Text>
+          </Pressable>
+        )}
       </View>
-      {apiError ? <ErrorBanner message={apiError} /> : null}
-      <AppButton title="Reintentar conexión" variant="ghost" onPress={probar} loading={probando} />
       <ErrorBanner message={error} />
-      <AppInput label="Email" value={email} onChangeText={setEmail} placeholder="ana@test.com" keyboard="email-address" autoCap="none" />
+      <AppInput label="Email" value={email} onChangeText={setEmail} placeholder="ejemplo@ejemplo.com" keyboard="email-address" autoCap="none" />
       <AppInput label="Contraseña" value={password} onChangeText={setPassword} placeholder="Tu contraseña" secure autoCap="none" />
       <AppButton title="Ingresar" onPress={submit} loading={loading} />
       <AppButton title="Crear cuenta" onPress={goRegister} variant="ghost" />
-      <Text style={styles.hint}>Demo: ana@test.com / Viaje1234</Text>
-    </ScrollView>
+    </FormScrollView>
   );
 }
 
@@ -76,10 +74,10 @@ const styles = StyleSheet.create({
   title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
   sub: { fontSize: theme.type.caption, color: theme.colors.muted },
   estado: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
-  host: { fontSize: theme.type.caption, color: theme.colors.muted, marginLeft: 'auto' },
   punto: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.muted },
   puntoOk: { backgroundColor: theme.colors.success },
   puntoFail: { backgroundColor: theme.colors.critical },
   estadoTexto: { fontSize: theme.type.caption, color: theme.colors.text },
-  hint: { fontSize: theme.type.caption, color: theme.colors.muted, textAlign: 'center' },
+  reintentar: { marginLeft: 'auto' },
+  reintentarTexto: { fontSize: theme.type.caption, color: theme.colors.primary, fontWeight: 'bold' },
 });

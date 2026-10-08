@@ -1,9 +1,9 @@
 // Registro viajero: crea rol viajero (el backend lo impone aunque se manipule el cliente).
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
-import { AppButton, AppInput, ErrorBanner } from '../../shared/components';
+import { AppButton, AppInput, ErrorBanner, FormScrollView } from '../../shared/components';
 
 export function RegisterScreen({ onSuccess, goLogin }) {
   const [nombre, setNombre] = useState('');
@@ -44,12 +44,12 @@ export function RegisterScreen({ onSuccess, goLogin }) {
   }
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
+    <FormScrollView style={styles.flex} contentContainerStyle={styles.root} bottomPadding={theme.spacing.lg}>
       <Text style={styles.title}>Crear cuenta</Text>
       <Text style={styles.sub}>Solo crea cuentas de viajero. Las cuentas de agente las da el equipo.</Text>
       <ErrorBanner message={error} />
-      <AppInput label="Nombre" value={nombre} onChangeText={setNombre} placeholder="Ana Viajera" />
-      <AppInput label="Email" value={email} onChangeText={setEmail} placeholder="ana@test.com" keyboard="email-address" autoCap="none" />
+      <AppInput label="Nombre" value={nombre} onChangeText={setNombre} placeholder="Tu nombre" />
+      <AppInput label="Email" value={email} onChangeText={setEmail} placeholder="ejemplo@ejemplo.com" keyboard="email-address" autoCap="none" />
       <AppInput label="Contraseña (mín. 8)" value={password} onChangeText={setPassword} placeholder="Tu contraseña" secure autoCap="none" />
       <View style={styles.check}>
         {filaRegla(reglaLargo, 'Mínimo 8 caracteres')}
@@ -64,7 +64,7 @@ export function RegisterScreen({ onSuccess, goLogin }) {
       )}
       <AppButton title="Registrarme" onPress={submit} loading={loading} />
       <AppButton title="Ya tengo cuenta" onPress={goLogin} variant="ghost" />
-    </ScrollView>
+    </FormScrollView>
   );
 }
 

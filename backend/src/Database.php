@@ -14,8 +14,7 @@ class Database {
     return self::$pdo;
   }
 
-  // Local: DB_* del backend/.env. Railway/PaaS: DATABASE_URL (plugin Postgres).
-  // Prioridad: DB_* explicitos > DATABASE_URL > defaults de localhost.
+  // Local: DB_* del backend/.env. Railway/PaaS: DATABASE_URL del plugin Postgres.
   private static function target(): array {
     $host = Config::get('DB_HOST', '');
     if ($host !== '') {

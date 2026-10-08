@@ -63,6 +63,7 @@ Requieren API en `:8000`:
 
 ## Apps (manual, F5/F6)
 `cd apps/viajero && npm install && npx expo start` (idem `apps/agente`), apuntando a `http://<tu-IP>:8000/api` (editar `BASE_URL` en `apps/shared/api.js`; localhost no sirve desde el celular).
+Credenciales demo (la app **no** las muestra): viajero `ana@test.com` / `Viaje1234` (otra: `bruno@test.com` / `Viaje5678`), agente `agente@despegar.com` / `Agente123` (otra: `maria@despegar.com` / `Agente456`).
 Checklist: login/logout, itinerario con pull-refresh, crear incidente con confirmación, filtros, cola agente con resumen, PUT prioridad/estado (Resuelto confirma), responder y leer hilo cruzado.
 
 ### App móvil: "Conectando…" infinito en el login

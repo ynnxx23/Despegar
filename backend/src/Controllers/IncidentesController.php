@@ -34,8 +34,9 @@ class IncidentesController {
     }
 
     $m = new Incidente($db);
+    $g = new GestionCaso($db);
     $id = $m->create((int)$claims['sub'], $rid, $tipo, $titulo, $descripcion);
-    $m->registrarEvento($id, (int)($claims['sub'] ?? 0) ?: null, 'creado', null);
+    $g->registrarEvento($id, (int)($claims['sub'] ?? 0) ?: null, 'creado', null);
     // Contrato: el viajero nunca ve prioridad real (se ignora si el cliente la envia).
     $row = Incidente::toPublic($m->findById($id));
     Response::json(['data' => $row], 201);
@@ -53,14 +54,15 @@ class IncidentesController {
   public static function ver(PDO $db, array $claims, int $id): void {
     $inc = self::propio($db, $claims, $id);
     $m = new Incidente($db);
+    $g = new GestionCaso($db);
     $data = Incidente::toPublic($inc);
     try {
-      $data['atendido_por'] = $m->asignadoNombre($id);
+      $data['atendido_por'] = $g->asignadoNombre($id);
     } catch (Throwable $e) {
       $data['atendido_por'] = null;
     }
     try {
-      $data['historial'] = $m->historialPublico($id);
+      $data['historial'] = $g->historialPublico($id);
     } catch (Throwable $e) {
       $data['historial'] = [];
     }
