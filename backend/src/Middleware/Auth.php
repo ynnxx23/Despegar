@@ -1,6 +1,5 @@
 <?php
-// Middleware auth: extrae Bearer JWT, valida firma+exp, exige rol.
-// Uso F2/F3: $user = Auth::requireRole(['viajero','agente']); 401/403 si falla.
+// Middleware auth: extrae el Bearer, valida firma y expiracion, y exige el rol.
 class Auth {
   public static function bearer(): ?string {
     $h = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');

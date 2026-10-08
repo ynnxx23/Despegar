@@ -1,6 +1,9 @@
 // Primitivas UI reutilizables (F4). Táctil 48, foco visible, errores con icono+texto (no solo color).
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Keyboard, KeyboardAvoidingView, Platform,
+  Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+} from 'react-native';
 import { theme } from './theme';
 
 export function AppButton({ title, onPress, loading, variant }) {
@@ -92,7 +95,59 @@ export function LoadingRow({ text }) {
   );
 }
 
+// ScrollView para formularios: el input enfocado nunca queda tapado por el teclado.
+// Mide la altura del teclado y la suma como padding, y scrollea al abrirse.
+// En iOS suma KeyboardAvoidingView; en Android el padding hace el trabajo.
+export function FormScrollView({ children, contentContainerStyle, style, bottomPadding = 0, ...rest }) {
+  const scrollRef = useRef(null);
+  const [kb, setKb] = useState(0);
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    const mostrar = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKb(e?.endCoordinates?.height ?? 0);
+    });
+    const ocultar = Keyboard.addListener('keyboardDidHide', () => setKb(0));
+    return () => {
+      mostrar.remove();
+      ocultar.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (kb <= 0) return undefined;
+    const t = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: scrollY + kb, animated: true });
+    }, 120);
+    return () => clearTimeout(t);
+  }, [kb, scrollY]);
+
+  const tecladoStyle = kb > 0 ? { paddingBottom: bottomPadding + kb } : null;
+
+  return (
+    <KeyboardAvoidingView
+      style={[styles.flex, style]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={0}
+    >
+      <ScrollView
+        ref={scrollRef}
+        style={styles.flex}
+        onScroll={(e) => setScrollY(e?.nativeEvent?.contentOffset?.y ?? 0)}
+        scrollEventThrottle={32}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={[contentContainerStyle, tecladoStyle]}
+        {...rest}
+      >
+        {children}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   btn: { minHeight: theme.touch, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: theme.spacing.md },
   btnPrimary: { backgroundColor: theme.colors.primary },
   btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.colors.border },

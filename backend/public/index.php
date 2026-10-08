@@ -1,5 +1,5 @@
 <?php
-// Front-controller F3: auth + dominio viajero/admin. Apps móviles llegan en F4-F6.
+// Front-controller: ruteo de la API (dominio viajero y agente).
 require_once __DIR__ . '/../src/Config.php';
 require_once __DIR__ . '/../src/Database.php';
 require_once __DIR__ . '/../src/Utils/JwtHS256.php';
@@ -8,6 +8,7 @@ require_once __DIR__ . '/../src/Middleware/Auth.php';
 require_once __DIR__ . '/../src/Models/Usuario.php';
 require_once __DIR__ . '/../src/Models/Reserva.php';
 require_once __DIR__ . '/../src/Models/Incidente.php';
+require_once __DIR__ . '/../src/Models/GestionCaso.php';
 require_once __DIR__ . '/../src/Models/Respuesta.php';
 require_once __DIR__ . '/../src/Controllers/AuthController.php';
 require_once __DIR__ . '/../src/Controllers/ItinerarioController.php';
@@ -75,7 +76,7 @@ if ($method === 'GET' && $path === '/api/me') {
   AuthController::me($db, $claims);
 }
 
-// --- Dominio viajero (RF-04/05/06) ---
+// --- Viajero ---
 if ($method === 'GET' && $path === '/api/itinerario') {
   $claims = Auth::requireRole(['viajero']);
   ItinerarioController::show($db, $claims);
@@ -114,7 +115,7 @@ if (preg_match('#^/api/incidentes/(\d+)/respuestas$#', $path, $mch)) {
   }
 }
 
-// --- Admin agente (RF-07/08/09, control RF-10: viajero recibe 403) ---
+// --- Agente ---
 if ($method === 'GET' && $path === '/api/admin/agentes') {
   Auth::requireRole(['agente']);
   AdminController::agentes($db);
@@ -190,7 +191,7 @@ if (preg_match('#^/api/admin/incidentes/(\d+)$#', $path, $mch)) {
   }
 }
 
-// Sin coincidencia: 404 (los endpoints F3 ya están cableados arriba).
+// Ninguna ruta coincidió.
 if (str_starts_with($path, '/api/')) {
   Response::error('Endpoint no encontrado', 404);
 }

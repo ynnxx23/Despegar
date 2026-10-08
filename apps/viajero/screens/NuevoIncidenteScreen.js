@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
-import { AppButton, ErrorBanner } from '../../shared/components';
+import { AppButton, ErrorBanner, FormScrollView } from '../../shared/components';
 import { TIPO_INCIDENTE, fmtFecha } from '../../shared/format';
 
 const TIPOS_FALLBACK = {
@@ -115,7 +115,7 @@ export function NuevoIncidenteScreen({ onCreated, reservaIdInicial }) {
   }
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <FormScrollView style={styles.root} contentContainerStyle={styles.content} bottomPadding={theme.spacing.lg}>
       <Text style={styles.title}>Reportar problema</Text>
       {reservaSel && <Text style={styles.aviso}>Reportando sobre {reservaSel.codigo}</Text>}
       <ErrorBanner message={error} />
@@ -145,7 +145,7 @@ export function NuevoIncidenteScreen({ onCreated, reservaIdInicial }) {
       <Text style={styles.label}>Descripción ({descripcion.trim().length}/2000, mín. 10)</Text>
       <TextInput style={[styles.input, styles.area]} value={descripcion} onChangeText={(t) => setDescripcion(t.slice(0, 2000))} placeholder="Contanos qué pasó, n° de vuelo o reserva…" placeholderTextColor={theme.colors.muted} multiline numberOfLines={4} textAlignVertical="top" maxLength={2000} autoCorrect={false} returnKeyType="send" onSubmitEditing={submit} />
       <AppButton title="Enviar reporte" onPress={submit} loading={loading} />
-    </ScrollView>
+    </FormScrollView>
   );
 }
 

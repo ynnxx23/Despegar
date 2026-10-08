@@ -55,16 +55,14 @@ export function ItinerarioScreen({ onReportar }) {
   const vuelos = lista.filter((r) => r?.tipo === 'vuelo').length;
   const hoteles = lista.filter((r) => r?.tipo === 'hotel').length;
   const hoy = inicioDia(new Date());
-  const futuras = lista
-    .filter((r) => r?.fecha_inicio && inicioDia(r.fecha_inicio) >= hoy)
-    .sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
-  const proximo = futuras.length > 0 ? futuras[0] : null;
+  const porFecha = (a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio);
   const proximos = lista
     .filter((r) => r?.fecha_inicio && inicioDia(r.fecha_inicio) >= hoy)
-    .sort((a, b) => new Date(a.fecha_inicio) - new Date(b.fecha_inicio));
+    .sort(porFecha);
   const pasados = lista
     .filter((r) => !r?.fecha_inicio || inicioDia(r.fecha_inicio) < hoy)
     .sort((a, b) => new Date(b?.fecha_inicio || 0) - new Date(a?.fecha_inicio || 0));
+  const proximo = proximos[0] ?? null;
 
   function tarjeta(r, destacada) {
     return (

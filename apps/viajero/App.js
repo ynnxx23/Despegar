@@ -10,7 +10,8 @@ import { LoginScreen } from './screens/LoginScreen';
 import { RegisterScreen } from './screens/RegisterScreen';
 import { ItinerarioScreen } from './screens/ItinerarioScreen';
 import { NuevoIncidenteScreen } from './screens/NuevoIncidenteScreen';
-import { MisIncidentesScreen, DetalleIncidenteScreen } from './screens/MisIncidentesScreen';
+import { MisIncidentesScreen } from './screens/MisIncidentesScreen';
+import { DetalleIncidenteScreen } from './screens/DetalleIncidenteScreen';
 import { AyudaScreen } from './screens/AyudaScreen';
 import { PerfilScreen } from './screens/PerfilScreen';
 

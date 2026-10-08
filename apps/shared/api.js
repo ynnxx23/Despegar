@@ -1,19 +1,14 @@
-// Cliente HTTP compartido F4: adjunta Bearer automáticamente y
-// notifica 401 (token inválido/expirado) para forzar logout (HCI: visibilidad de estado).
-// Sin Axios: fetch alcanza y evita una dependencia (decisión plan §3).
-// URL de la API: Expo incrusta EXPO_PUBLIC_API_URL al compilar el bundle.
-// Cada PC crea apps/viajero/.env y apps/agente/.env (gitignored) con su IP LAN,
-// ej. EXPO_PUBLIC_API_URL=http://192.168.1.10:8000/api
-// (ipconfig -> IPv4). En emulador Android usa 'http://10.0.2.2:8000/api'.
-// Sin variable cae a localhost (solo sirve en web).
+// Cliente HTTP compartido: adjunta el Bearer, corta cada request a los 8s y avisa
+// los 401 (token invalido/expirado) para forzar el logout. Sin Axios: fetch alcanza.
+// La URL sale de EXPO_PUBLIC_API_URL, que Expo incrusta al compilar el bundle
+// (apps/<app>/.env, gitignored). Sin la variable cae a localhost (solo web).
 const BASE_URL = (typeof process !== 'undefined' && process.env && process.env.EXPO_PUBLIC_API_URL) || 'http://localhost:8000/api';
 
-// Host (sin esquema ni /api) para mostrar en UI y detectar config equivocada.
+// Host (sin esquema ni /api) por si hay que depurar la configuracion.
 export const API_HOST = String(BASE_URL).replace(/^https?:\/\//, '').split('/')[0] || 'localhost';
-export const API_BASE_URL = BASE_URL;
 
-// RN no aplica timeout por defecto: sin esto un paquete descartado deja la UI en
-// "Conectando…" para siempre. Corta a los 8s y devuelve error legible.
+// RN no aplica timeout por defecto: sin esto un paquete descartado deja la UI
+// colgada para siempre.
 const TIMEOUT_MS = 8000;
 
 let memoryToken = null;
@@ -41,12 +36,12 @@ async function request(path, options = {}) {
   } catch (e) {
     const abortado = e && (e.name === 'AbortError' || (controller && controller.signal && controller.signal.aborted));
     if (abortado) {
-      const err = new Error(`Timeout: la API (${API_HOST}) no respondió en ${TIMEOUT_MS / 1000}s. Revisá IP/red.`);
+      const err = new Error('El servidor no respondió a tiempo. Revisá tu conexión e intentá de nuevo.');
       err.status = 0;
       err.timeout = true;
       throw err;
     }
-    const err = new Error(`No se pudo conectar con la API (${API_HOST}): ${e?.message ?? e}`);
+    const err = new Error('No se pudo conectar con el servidor. Revisá tu conexión e intentá de nuevo.');
     err.status = 0;
     err.offline = true;
     throw err;
