@@ -176,11 +176,31 @@ Repo local, identidad `Grupo Despegar`, 6+ commits (`docs/feat/test/fix/style`),
 
 ## 11. Entorno y despliegue
 
-Servicios: PostgreSQL x64 15 `:5432` (rol `despegar`/`despegar_dev`, BD `despegar`;
+Servicios: PostgreSQL x64 15 `:5432` (rol `despegar` con password propia, solo en `backend/.env`, BD `despegar`;
 superusuario local con password propia), API `php -S 0.0.0.0:8000 -t backend/public`
 (`0.0.0.0` para alcance LAN; requiere `pdo_pgsql` en `php.ini`), apps con `BASE_URL` a la IP
 LAN (`10.0.2.2` en emulador Android). Variables `.env`: `DB_HOST/PORT/NAME/USER/PASS`,
 `JWT_SECRET`, `BCRYPT_COST`, `JWT_TTL_HOURS`. Comandos BD en `README.md`.
+
+Red required en el celular: misma LAN que la PC, firewall con reglas TCP `8000` y
+`8081-8082` entrantes y perfil de red "Privada". La IP LAN es dinámica por DHCP, así que
+`start-viajero.cmd` / `start-agente.cmd` reescriben `apps/*/.env` (`EXPO_PUBLIC_API_URL`)
+con la IP vigente antes de arrancar Metro; la URL queda incrustada en el bundle, por lo que
+cambiar la IP implica reiniciar Metro (o recargar la app). El cliente HTTP compartido
+corta cada request a 8 s: sin ese timeout un paquete descartado dejaba la UI en
+"Conectando…" indefinidamente (RN no aplica timeout por defecto).
+
+### Despliegue en la nube (Railway)
+La API también corre en Railway (servicio `api` con `Dockerfile` + plugin Postgres), de modo que
+las apps funcionan sin la PC encendida y sin compartir Wi-Fi: `https://api-production-88975.up.railway.app/api`.
+Variables del servicio: `DATABASE_URL=${{Postgres.DATABASE_URL}}` (la parsea
+`backend/src/Database.php` cuando no hay `DB_*`), `JWT_SECRET` (>= 32 chars, obligatorio) y
+`PORT` (inyectado por Railway; el `Dockerfile` escucha ahí y usa `PHP_CLI_SERVER_WORKERS=8`
+porque el server embebido de PHP es single-thread). La BD se inicializa una vez por túnel SSH
+(`railway connect Postgres --tunnel-only`) con `deploy/init-db.ps1`
+(`db/schema.sql` es destructivo: solo sobre base vacía). Las apps eligen la URL según
+`apps/*/.env.railway` (nube) o el argumento `local` de los `.cmd` (backend local).
+Procedimiento completo en `docs/railway.md`.
 
 ## 12. Decisiones técnicas
 
