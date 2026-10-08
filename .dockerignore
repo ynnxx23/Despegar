@@ -1,0 +1,19 @@
+# Contexto de build: solo el backend. Nada de apps, node_modules, docs ni secretos.
+.git
+.gitattributes
+.gitignore
+apps/
+node_modules/
+docs/
+tests/
+deploy/
+*.docx
+*.md
+!README.md
+db/
+backend/.env
+backend/.env.example
+start-*.cmd
+docker-compose.yml
+Dockerfile
+.dockerignore

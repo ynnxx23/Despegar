@@ -1,0 +1,14 @@
+# Lo que se sube a Railway: solo lo necesario para construir la imagen.
+# (El upload del CLI respeta este archivo y el .gitignore del repo.)
+.git
+.gitignore
+.gitattributes
+apps/
+node_modules/
+docs/
+tests/
+*.docx
+start-*.cmd
+docker-compose.yml
+backend/.env
+backend/.env.example
