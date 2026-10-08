@@ -16,6 +16,19 @@ require_once __DIR__ . '/../src/Controllers/AdminController.php';
 
 Config::load(__DIR__ . '/../.env');
 
+// Red de seguridad: ninguna excepcion filtra trace/SQL al cliente (se loguea y se
+// responde 500 generico con el mismo formato JSON de la API).
+ini_set('display_errors', '0');
+set_exception_handler(function (Throwable $e): void {
+  error_log('Error no controlado: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+  if (!headers_sent()) {
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+  }
+  echo json_encode(['error' => ['code' => 500, 'message' => 'Error interno del servidor']], JSON_UNESCAPED_UNICODE);
+  exit;
+});
+
 // Fail-fast: sin secreto JWT robusto no se opera (nunca exponer el valor al cliente).
 if (strlen(Config::get('JWT_SECRET', '')) < 32) {
   error_log('Falta JWT_SECRET de al menos 32 caracteres');
@@ -83,7 +96,7 @@ if (preg_match('#^/api/incidentes/(\d+)$#', $path, $mch)) {
   $claims = Auth::requireRole(['viajero', 'agente']);
   if ($method === 'GET') {
     if ($claims['rol'] === 'agente') {
-      AdminController::ver($db, (int)$mch[1]);
+      AdminController::ver($db, $claims, (int)$mch[1]);
     } else {
       IncidentesController::ver($db, $claims, (int)$mch[1]);
     }
@@ -113,8 +126,8 @@ if ($method === 'GET' && $path === '/api/admin/mi-cola') {
 }
 
 if ($method === 'GET' && $path === '/api/admin/incidentes') {
-  Auth::requireRole(['agente']);
-  AdminController::cola($db);
+  $claims = Auth::requireRole(['agente']);
+  AdminController::cola($db, $claims);
 }
 
 if ($method === 'GET' && $path === '/api/admin/incidentes/resumen') {
@@ -171,7 +184,7 @@ if (preg_match('#^/api/admin/incidentes/(\d+)/respuestas$#', $path, $mch)) {
 if (preg_match('#^/api/admin/incidentes/(\d+)$#', $path, $mch)) {
   $claims = Auth::requireRole(['agente']);
   if ($method === 'GET') {
-    AdminController::ver($db, (int)$mch[1]);
+    AdminController::ver($db, $claims, (int)$mch[1]);
   } elseif ($method === 'PUT') {
     AdminController::actualizar($db, $claims, (int)$mch[1], bodyJson());
   }

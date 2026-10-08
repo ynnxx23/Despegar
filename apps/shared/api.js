@@ -72,6 +72,7 @@ export const api = {
     request(path, { ...(opts || {}), method: 'POST', body: JSON.stringify(body) }),
   put: (path, body, opts) =>
     request(path, { ...(opts || {}), method: 'PUT', body: JSON.stringify(body) }),
+  del: (path, opts) => request(path, { ...(opts || {}), method: 'DELETE' }),
   health: () => request('/health', { method: 'GET' }),
   register: (nombre, email, password) =>
     request('/register', { method: 'POST', body: JSON.stringify({ nombre, email, password }) }),

@@ -44,13 +44,13 @@ Ver `docs/railway.md`.
 | GET | `/itinerario` | viajero | Sus reservas |
 | GET/POST | `/incidentes/mios`, `/incidentes` | viajero | Listar propios / crear (7 tipos, sugerencia auto, sin prioridad real) |
 | GET | `/incidentes/:id`(+`/respuestas`) | dueño o agente | Detalle (+`atendido_por`, historial público) e hilo |
-| GET | `/admin/incidentes?estado=&prioridad=&orden=asc\|desc\|urgencia&page=&limit=` | agente | Cola urgencia (vencidos SLA, sin triar, Critica/Alta/Baja) + filtros |
+| GET | `/admin/incidentes?estado=&prioridad=&orden=asc\|desc\|urgencia&page=&limit=` | agente | Cola urgencia (vencidos SLA, sin triar, Critica/Alta/Baja) + filtros. Cada caso trae `asignado_a`, `asignado_nombre`, `siguiendo` y `seguidores_count` |
 | GET | `/admin/incidentes/resumen` | agente | Conteos `resumen_cola()` + `sin_triar,vencidos,mios` |
-| GET/PUT | `/admin/incidentes/:id` | agente | Ver / triaje prioridad+SLA+estado (Resuelto exige prioridad) |
+| GET/PUT | `/admin/incidentes/:id` | agente | Ver (`asignado`, `seguidores`, `siguiendo`, `mi_asignado`) / triaje prioridad+SLA+estado (Resuelto exige prioridad) |
 | GET/POST | `/admin/incidentes/:id/respuestas` | agente | Hilo / responder (atómico vía `crear_respuesta()`) |
-| POST | `/admin/incidentes/:id/claim`, `/release`, `/derivar`, `/seguir` | agente | Tomar / liberar / derivar `{agente_id,motivo?}` / seguir |
+| POST | `/admin/incidentes/:id/claim`, `/release`, `/derivar`, `/seguir` | agente | Tomar / liberar / derivar `{agente_id,motivo?}` / seguir (cualquier agente puede seguir un caso, tenga o no) |
 | DELETE | `/admin/incidentes/:id/seguir` | agente | Dejar de seguir |
-| GET | `/admin/incidentes/:id/historial`, `/admin/agentes`, `/admin/mi-cola` | agente | Eventos con actor / agentes / mi cola (asignados+seguidos) |
+| GET | `/admin/incidentes/:id/historial`, `/admin/agentes`, `/admin/mi-cola?vista=mios\|siguiendo` | agente | Eventos con actor / agentes / mi cola: `mios` = lo que reclamé, `siguiendo` = lo que sigo y no es mío (sin `vista`: unión) |
 
 Errores: 400 validación, 401 sin token/inválido/expirado, 403 rol insuficiente o recurso ajeno, 404 inexistente, 409 email duplicado.
 
