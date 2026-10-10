@@ -40,17 +40,18 @@ Write-Host "[i] tablas existentes en public: $tables"
 
 if ($tables -gt 0 -and -not $Force) {
   Write-Host "[!] La BD ya tiene tablas: NO se aplica schema.sql (destructivo)." -ForegroundColor Yellow
-  Write-Host "[!] Usa -Force solo si querés resetear la base." -ForegroundColor Yellow
+  Write-Host "[i] Se aplican seeds + migraciones (upgrade de una base vieja)." -ForegroundColor Yellow
+  Invoke-Sql (Join-Path $db 'seeds.sql')
+  Invoke-Sql (Join-Path $db 'migrate_02_prioridad_nullable.sql')
+  Invoke-Sql (Join-Path $db 'migrate_03_gestion_casos.sql')
+  Invoke-Sql (Join-Path $db 'migrate_04_refresh_tokens.sql')
 } else {
   if ($tables -gt 0) {
     Write-Host "[!] -Force: se borran y recrean las tablas." -ForegroundColor Red
   }
   Invoke-Sql (Join-Path $db 'schema.sql')
+  Invoke-Sql (Join-Path $db 'seeds.sql')
 }
-
-Invoke-Sql (Join-Path $db 'seeds.sql')
-Invoke-Sql (Join-Path $db 'migrate_02_prioridad_nullable.sql')
-Invoke-Sql (Join-Path $db 'migrate_03_gestion_casos.sql')
 
 Write-Host "[OK] Base inicializada." -ForegroundColor Green
 Write-Host "    Usuarios demo: ana@test.com / Viaje1234 (viajera), agente@despegar.com / Agente123 (agente)"

@@ -1,15 +1,17 @@
 <?php
-// Front-controller: ruteo de la API (dominio viajero y agente).
+// Front-controller F3: auth + dominio viajero/admin. Apps móviles llegan en F4-F6.
 require_once __DIR__ . '/../src/Config.php';
 require_once __DIR__ . '/../src/Database.php';
 require_once __DIR__ . '/../src/Utils/JwtHS256.php';
 require_once __DIR__ . '/../src/Utils/Response.php';
+require_once __DIR__ . '/../src/Utils/Cors.php';
 require_once __DIR__ . '/../src/Middleware/Auth.php';
 require_once __DIR__ . '/../src/Models/Usuario.php';
 require_once __DIR__ . '/../src/Models/Reserva.php';
 require_once __DIR__ . '/../src/Models/Incidente.php';
 require_once __DIR__ . '/../src/Models/GestionCaso.php';
 require_once __DIR__ . '/../src/Models/Respuesta.php';
+require_once __DIR__ . '/../src/Models/RefreshToken.php';
 require_once __DIR__ . '/../src/Controllers/AuthController.php';
 require_once __DIR__ . '/../src/Controllers/ItinerarioController.php';
 require_once __DIR__ . '/../src/Controllers/IncidentesController.php';
@@ -36,9 +38,7 @@ if (strlen(Config::get('JWT_SECRET', '')) < 32) {
   Response::error('Error interno del servidor', 500);
 }
 
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+Cors::apply();
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
 $method = $_SERVER['REQUEST_METHOD'];
@@ -71,30 +71,38 @@ if ($method === 'POST' && $path === '/api/login') {
   AuthController::login($db, bodyJson());
 }
 
+if ($method === 'POST' && $path === '/api/refresh') {
+  AuthController::refresh($db, bodyJson());
+}
+
+if ($method === 'POST' && $path === '/api/logout') {
+  AuthController::logout($db, bodyJson());
+}
+
 if ($method === 'GET' && $path === '/api/me') {
-  $claims = Auth::requireRole(['viajero', 'agente']);
+  $claims = Auth::requireRole($db, ['viajero', 'agente']);
   AuthController::me($db, $claims);
 }
 
-// --- Viajero ---
+// --- Dominio viajero (RF-04/05/06) ---
 if ($method === 'GET' && $path === '/api/itinerario') {
-  $claims = Auth::requireRole(['viajero']);
+  $claims = Auth::requireRole($db, ['viajero']);
   ItinerarioController::show($db, $claims);
 }
 
 if ($method === 'GET' && $path === '/api/incidentes/mios') {
-  $claims = Auth::requireRole(['viajero']);
+  $claims = Auth::requireRole($db, ['viajero']);
   IncidentesController::mios($db, $claims);
 }
 
 if ($method === 'POST' && $path === '/api/incidentes') {
-  $claims = Auth::requireRole(['viajero']);
+  $claims = Auth::requireRole($db, ['viajero']);
   IncidentesController::crear($db, $claims, bodyJson());
 }
 
 // Detalle y respuestas visibles para dueño (viajero) o agente global (RF-06/RF-09).
 if (preg_match('#^/api/incidentes/(\d+)$#', $path, $mch)) {
-  $claims = Auth::requireRole(['viajero', 'agente']);
+  $claims = Auth::requireRole($db, ['viajero', 'agente']);
   if ($method === 'GET') {
     if ($claims['rol'] === 'agente') {
       AdminController::ver($db, $claims, (int)$mch[1]);
@@ -105,7 +113,7 @@ if (preg_match('#^/api/incidentes/(\d+)$#', $path, $mch)) {
 }
 
 if (preg_match('#^/api/incidentes/(\d+)/respuestas$#', $path, $mch)) {
-  $claims = Auth::requireRole(['viajero', 'agente']);
+  $claims = Auth::requireRole($db, ['viajero', 'agente']);
   if ($method === 'GET') {
     if ($claims['rol'] === 'agente') {
       AdminController::respuestas($db, (int)$mch[1]);
@@ -115,57 +123,57 @@ if (preg_match('#^/api/incidentes/(\d+)/respuestas$#', $path, $mch)) {
   }
 }
 
-// --- Agente ---
+// --- Admin agente (RF-07/08/09, control RF-10: viajero recibe 403) ---
 if ($method === 'GET' && $path === '/api/admin/agentes') {
-  Auth::requireRole(['agente']);
+  Auth::requireRole($db, ['agente']);
   AdminController::agentes($db);
 }
 
 if ($method === 'GET' && $path === '/api/admin/mi-cola') {
-  $claims = Auth::requireRole(['agente']);
+  $claims = Auth::requireRole($db, ['agente']);
   AdminController::miCola($db, $claims);
 }
 
 if ($method === 'GET' && $path === '/api/admin/incidentes') {
-  $claims = Auth::requireRole(['agente']);
+  $claims = Auth::requireRole($db, ['agente']);
   AdminController::cola($db, $claims);
 }
 
 if ($method === 'GET' && $path === '/api/admin/incidentes/resumen') {
-  $claims = Auth::requireRole(['agente']);
+  $claims = Auth::requireRole($db, ['agente']);
   AdminController::resumen($db, $claims);
 }
 
 if (preg_match('#^/api/admin/incidentes/(\d+)/historial$#', $path, $mch)) {
-  Auth::requireRole(['agente']);
+  Auth::requireRole($db, ['agente']);
   if ($method === 'GET') {
     AdminController::historial($db, (int)$mch[1]);
   }
 }
 
 if (preg_match('#^/api/admin/incidentes/(\d+)/claim$#', $path, $mch)) {
-  $claims = Auth::requireRole(['agente']);
+  $claims = Auth::requireRole($db, ['agente']);
   if ($method === 'POST') {
     AdminController::claim($db, $claims, (int)$mch[1]);
   }
 }
 
 if (preg_match('#^/api/admin/incidentes/(\d+)/release$#', $path, $mch)) {
-  $claims = Auth::requireRole(['agente']);
+  $claims = Auth::requireRole($db, ['agente']);
   if ($method === 'POST') {
     AdminController::release($db, $claims, (int)$mch[1]);
   }
 }
 
 if (preg_match('#^/api/admin/incidentes/(\d+)/derivar$#', $path, $mch)) {
-  $claims = Auth::requireRole(['agente']);
+  $claims = Auth::requireRole($db, ['agente']);
   if ($method === 'POST') {
     AdminController::derivar($db, $claims, (int)$mch[1], bodyJson());
   }
 }
 
 if (preg_match('#^/api/admin/incidentes/(\d+)/seguir$#', $path, $mch)) {
-  $claims = Auth::requireRole(['agente']);
+  $claims = Auth::requireRole($db, ['agente']);
   if ($method === 'POST') {
     AdminController::seguir($db, $claims, (int)$mch[1]);
   } elseif ($method === 'DELETE') {
@@ -174,7 +182,7 @@ if (preg_match('#^/api/admin/incidentes/(\d+)/seguir$#', $path, $mch)) {
 }
 
 if (preg_match('#^/api/admin/incidentes/(\d+)/respuestas$#', $path, $mch)) {
-  $claims = Auth::requireRole(['agente']);
+  $claims = Auth::requireRole($db, ['agente']);
   if ($method === 'GET') {
     AdminController::respuestas($db, (int)$mch[1]);
   } elseif ($method === 'POST') {
@@ -183,7 +191,7 @@ if (preg_match('#^/api/admin/incidentes/(\d+)/respuestas$#', $path, $mch)) {
 }
 
 if (preg_match('#^/api/admin/incidentes/(\d+)$#', $path, $mch)) {
-  $claims = Auth::requireRole(['agente']);
+  $claims = Auth::requireRole($db, ['agente']);
   if ($method === 'GET') {
     AdminController::ver($db, $claims, (int)$mch[1]);
   } elseif ($method === 'PUT') {
@@ -191,7 +199,7 @@ if (preg_match('#^/api/admin/incidentes/(\d+)$#', $path, $mch)) {
   }
 }
 
-// Ninguna ruta coincidió.
+// Sin coincidencia: 404 (los endpoints F3 ya están cableados arriba).
 if (str_starts_with($path, '/api/')) {
   Response::error('Endpoint no encontrado', 404);
 }

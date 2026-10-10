@@ -19,7 +19,11 @@ EXPOSE 8000
 # dispara varias peticiones en paralelo (health + itinerario).
 ENV PHP_CLI_SERVER_WORKERS=8
 
+# Healthcheck con switch: HEALTHCHECK_ENABLED=0 hace que el check salga sin pegarle
+# un request al server (sin trafico saliente). Necesario para que Railway pueda
+# dormir el servicio (serverless): cualquier request saliente lo mantiene despierto.
+# Toggle desde el deploy: deploy\railway-pause.ps1 / deploy\railway-resume.ps1
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD php -r "exit(@file_get_contents('http://127.0.0.1:'.(getenv('PORT')?:8000).'/api/health') ? 0 : 1);"
+  CMD php -r "$e = strtolower((string) getenv('HEALTHCHECK_ENABLED')); if (in_array($e, ['0','false','off','no'], true)) { exit(0); } exit(@file_get_contents('http://127.0.0.1:'.(getenv('PORT')?:8000).'/api/health') ? 0 : 1);"
 
 CMD ["sh", "-c", "php -S 0.0.0.0:${PORT:-8000} -t /app/public"]

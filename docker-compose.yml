@@ -9,7 +9,8 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ../db:/docker-entrypoint-initdb.d:ro
+      - ../db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../db/seeds.sql:/docker-entrypoint-initdb.d/02-seeds.sql:ro
   api:
     image: php:8.2-apache
     depends_on:
@@ -24,5 +25,11 @@ services:
       DB_NAME: despegar
       DB_USER: despegar
       DB_PASS: ${DB_PASS:-cambiar_por_tu_password_local}
+      JWT_SECRET: ${JWT_SECRET:-cambiar_por_secreto_aleatorio_de_32_bytes_minimo}
+      BCRYPT_COST: "10"
+      JWT_TTL_HOURS: "8"
+      REFRESH_TTL_DAYS: "30"
+      APP_ENV: development
+      CORS_ORIGIN: "*"
 volumes:
   pgdata:
