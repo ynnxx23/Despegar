@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
-import { AppButton, AppInput, ErrorBanner, FormScrollView } from '../../shared/components';
+import { AppButton, AppInput, ApiWarning, ErrorBanner, FormScrollView } from '../../shared/components';
 
 export function LoginScreen({ onSuccess, goRegister }) {
   const [email, setEmail] = useState('');
@@ -36,7 +36,7 @@ export function LoginScreen({ onSuccess, goRegister }) {
     setLoading(true);
     try {
       const r = await api.login(email.trim().toLowerCase(), password);
-      onSuccess(r.token, r.user);
+      onSuccess(r.token, r.refresh_token, r.user);
     } catch (e) {
       setError(e.status === 401 ? 'Email o contraseña incorrectos.' : e.message);
     } finally {
@@ -48,6 +48,7 @@ export function LoginScreen({ onSuccess, goRegister }) {
     <FormScrollView style={styles.flex} contentContainerStyle={styles.root} bottomPadding={theme.spacing.lg}>
       <Text style={styles.title}>Despegar · Ayuda al Viajero</Text>
       <Text style={styles.sub}>Tus viajes y respuestas en un solo lugar.</Text>
+      <ApiWarning />
       <View style={styles.estado}>
         <View style={[styles.punto, apiOk === true && styles.puntoOk, apiOk === false && styles.puntoFail]} />
         <Text style={styles.estadoTexto}>

@@ -59,11 +59,13 @@ function withMemoryFallback(adapter) {
 export function createAuthStore(adapter = expoAdapter) {
   const safe = adapter === memoryAdapter ? adapter : withMemoryFallback(adapter);
   return {
-    saveSession: async (token, user) => {
+    saveSession: async (token, refreshToken, user) => {
       await safe.setItem('despegar.token', token);
+      await safe.setItem('despegar.refresh', refreshToken || '');
       await safe.setItem('despegar.user', JSON.stringify(user));
     },
     getToken: () => safe.getItem('despegar.token'),
+    getRefreshToken: () => safe.getItem('despegar.refresh'),
     getUser: async () => {
       const raw = await safe.getItem('despegar.user');
       try {
@@ -74,6 +76,7 @@ export function createAuthStore(adapter = expoAdapter) {
     },
     clearSession: async () => {
       await safe.deleteItem('despegar.token');
+      await safe.deleteItem('despegar.refresh');
       await safe.deleteItem('despegar.user');
     },
   };

@@ -53,4 +53,21 @@ $out += "ME_TAMPER ok=$($r9.ok) code=$($r9.code) esperado=401"
 # 10. hash nunca expuesto
 $hasHash = ($r1.data | ConvertTo-Json).Contains('password_hash')
 $out += "LEAK_HASH=$hasHash esperado=False"
+# 11. login entrega refresh token
+$rt = $r4.data.refresh_token
+$out += "REFRESH_ENTREGADO len=$($rt.Length) esperado>0"
+# 12. refresh valido -> access token nuevo
+$rf = Call 'POST' '/api/refresh' @{ refresh_token = $rt }
+$out += "REFRESH ok=$($rf.ok) token_nuevo=$($rf.data.token.Length -gt 0) refresh_rotado=$($rf.data.refresh_token -ne $rt)"
+# 13. el refresh viejo queda revocado (rotacion de un solo uso)
+$rf2 = Call 'POST' '/api/refresh' @{ refresh_token = $rt }
+$out += "REFRESH_REUSO code=$($rf2.code) esperado=401"
+# 14. refresh invalido -> 401
+$rf3 = Call 'POST' '/api/refresh' @{ refresh_token = 'basura' }
+$out += "REFRESH_BASURA code=$($rf3.code) esperado=401"
+# 15. logout revoca el refresh
+$lo = Call 'POST' '/api/logout' @{ refresh_token = $rf.data.refresh_token }
+$out += "LOGOUT ok=$($lo.ok) esperado=200"
+$rf4 = Call 'POST' '/api/refresh' @{ refresh_token = $rf.data.refresh_token }
+$out += "REFRESH_POST_LOGOUT code=$($rf4.code) esperado=401"
 $out | ForEach-Object { $_ }

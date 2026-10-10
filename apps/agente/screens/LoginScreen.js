@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
-import { AppButton, AppInput, ErrorBanner, FormScrollView } from '../../shared/components';
+import { AppButton, AppInput, ApiWarning, ErrorBanner, FormScrollView } from '../../shared/components';
 
 const APP_VERSION = 'v0.1.0';
 
@@ -26,7 +26,7 @@ export function LoginScreen({ onSuccess }) {
     try {
       const r = await api.login(email.trim().toLowerCase(), password);
       if (r?.user?.rol !== 'agente') { setError('Esta app es solo para agentes de soporte.'); return; }
-      onSuccess?.(r.token, r.user);
+      onSuccess?.(r.token, r.refresh_token, r.user);
     } catch (e) {
       setError(e?.status === 401 ? 'Email o contraseña incorrectos.' : (e?.message ?? 'No se pudo ingresar.'));
     } finally {
@@ -56,6 +56,7 @@ export function LoginScreen({ onSuccess }) {
     >
       <Text style={styles.title}>Centro de Resolución</Text>
       <Text style={styles.sub}>Acceso interno de agentes. Sin registro público.</Text>
+      <ApiWarning />
       <ErrorBanner message={error} />
       <AppInput label="Email corporativo" value={email} onChangeText={setEmail} placeholder="ejemplo@gmail.com" keyboard="email-address" autoCap="none" />
       <AppInput label="Contraseña" value={password} onChangeText={setPassword} placeholder="Tu contraseña" secure autoCap="none" />
