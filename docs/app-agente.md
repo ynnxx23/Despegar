@@ -21,26 +21,32 @@ apps/agente/
   App.js                    # sesión corporativa + cola + gestión
   app.json                  # slug despegar-agente, package com.despegar.agente
   metro.config.js           # watchFolders ../shared, nodeModulesPaths local
+  components/
+    estilosGestion.js       # hoja de estilos de la gestión (compartida con los paneles)
+    panelesGestion.js       # ResumenCaso, PanelAccion, PanelViajero, PanelTriaje,
+                            #   PanelRespuesta, PanelHistorial
   screens/
     LoginScreen.js          # login corporativo (rechaza no-agente, sin registro)
-    ColaScreen.js           # cola: resumen, filtros, orden asc/desc, paginación, highlight Crítica
-    DetalleGestionScreen.js # gestión: PUT prioridad/estado (Resuelto confirma), responder, hilo
+    ColaScreen.js           # cola: pestañas, resumen, filtros, orden, paginación
+    DetalleGestionScreen.js # caso: hook useCaso + acciones (reclamar, seguir, derivar, responder)
 apps/shared/                # común a ambas apps (único código compartido)
   theme.js                  # violeta #6C2BD9/#4A1FA3, fondo #F6F5FB, semántica prioridad/estado
-  api.js                    # fetch + Bearer automático + onUnauthorized->logout en 401
+  api.js                    # fetch + Bearer automático + timeout 8s + onUnauthorized->logout en 401
   auth.js                   # SecureStore (adaptador memoria testeable)
-  components.js             # Button/Input/Banner/Badge/Empty/Loading
-  format.js                 # etiquetas legibles, fechas es-AR
+  components.js             # Button/Input/Banner/Badge/Empty/Loading/FormScrollView
+  format.js                 # etiquetas legibles, estados, prioridades, fechas es-AR
 ```
 
-`BASE_URL` en `apps/shared/api.js`: IP LAN de la PC para Expo Go
-(`http://<IP>:8000/api`), `10.0.2.2` en emulador Android, localhost solo web.
+La URL de la API sale de `EXPO_PUBLIC_API_URL`, que Expo incrusta al compilar el bundle:
+la escriben los `.cmd` de arranque desde `deploy/api-url.txt` (nube) o desde la IP LAN
+detectada (`start-agente.cmd local`). `10.0.2.2` en emulador Android, localhost solo web.
 
 ## 3. Puesta en marcha
 
 ```cmd
 REM desde la raíz del repo (doble clic):
-start-agente.cmd
+start-agente.cmd              -> API en la nube (deploy/api-url.txt)
+start-agente.cmd local        -> backend local en http://<IP-LAN>:8000/api
 ```
 
 Equivalente manual:
@@ -57,32 +63,44 @@ Si `EADDRINUSE`: otro Metro ocupa el puerto — cerrar terminal sobrante.
 Si `main has not been registered`: Metro en carpeta errónea o caché vieja —
 detener todo, arrancar desde `apps\agente`, `--clear`.
 
-Credencial demo: `agente@despegar.com` / `Agente123`.
+Credenciales demo (la app **no** las muestra): `agente@despegar.com` / `Agente123`
+(otra: `maria@despegar.com` / `Agente456`).
 
 ## 4. Pantallas y flujos
 
 | Pantalla | Origen | Qué hace |
 |---|---|---|
-| Login | `screens/LoginScreen.js` | corporativo; rechaza cuentas no-agente; sin link de registro |
-| Cola | `screens/ColaScreen.js` | `GET /admin/incidentes` (filtros estado/prioridad, orden fecha, paginación `page/limit`) + `GET /admin/incidentes/resumen` (conteos `resumen_cola()`), highlight Crítica |
-| Gestión | `screens/DetalleGestionScreen.js` | `GET /admin/incidentes/:id`, `PUT` prioridad/estado (Resuelto pide confirmación), `GET/POST /admin/incidentes/:id/respuestas` (responder pasa a EnGestion vía `crear_respuesta()`) |
+| Login | `screens/LoginScreen.js` | corporativo; rechaza cuentas no-agente; sin link de registro; estado "Conectando…/Conectado" |
+| Cola | `screens/ColaScreen.js` | pestañas **Activos / Sin triar / Míos / Siguiendo / Resueltos**, resumen con conteos, filtros tipo/prioridad, orden, paginación; cards con "Reclamado por X", "Lo tenés vos", "Siguiendo" y botones Reclamar / Seguir |
+| Gestión | `screens/DetalleGestionScreen.js` + `components/panelesGestion.js` | `GET /admin/incidentes/:id`, `POST .../claim` (reclamar), `POST/DELETE .../seguir` (seguir/dejar de seguir), `POST .../release`, `POST .../derivar`, `PUT` prioridad/estado (Resuelto pide confirmación), `GET/POST .../respuestas` (responder pasa a EnGestion vía `crear_respuesta()`) |
 
-Flujo feliz: login → cola (viejos primero) → filtrar críticos → abrir caso →
-responder al viajero → ajustar prioridad → marcar Resuelto (confirmar) →
-verificar en resumen. 401 (expirado/inválido) → logout automático.
+Flujo feliz: login → cola (urgentes primero) → filtrar críticos → abrir caso →
+reclamar (aparece en **Míos**) → responder al viajero → ajustar prioridad →
+marcar Resuelto (confirmar) → verificar en resumen. 401 (expirado/inválido) → logout automático.
+
+**Reclamar y seguir**:
+- *Reclamar* asigna el caso al agente (`asignado_a`), lo pasa a EnGestion y lo marca en la
+  pestaña **Míos**. Si otro agente lo tenía, la API responde 409.
+- *Seguir* es libre: cualquier agente puede seguir un caso, tenga o no el caso asignado.
+  Los casos que sigo y no son míos aparecen en la pestaña **Siguiendo**.
+- El detalle muestra quién lo reclamó, quiénes lo siguen y permite derivarlo a otro agente.
 
 ## 5. Permisos y errores visibles
 
 - Solo endpoints rol `agente`. Viajero en rutas `/admin` → 403.
 - PUT parcial valida valores cerrados (prioridad/estado) → 400 si inválido.
 - Mensajes UI por situación: cargando, vacío, error con reintentar, éxito, confirmaciones.
+- El cliente HTTP corta cada request a los 8 s: si la API no responde, la UI lo dice en vez
+  de quedar colgada. Los mensajes no exponen la URL del servidor.
 - Sin `console.log` con datos sensibles.
 
-## 6. Checklist manual (Expo Go, misma Wi-Fi)
+## 6. Checklist manual (Expo Go)
 
 1. Login corporativo / rechazo a cuenta viajero.
 2. Cola con resumen de conteos.
-3. Filtros estado/prioridad + orden asc/desc + paginación.
-4. PUT prioridad/estado (Resuelto con confirmación).
-5. Responder y verificar hilo cruzado en app viajero.
-6. Sesión persistente al recargar; logout limpia todo.
+3. Filtros tipo/prioridad + orden asc/desc + paginación.
+4. Reclamar un caso → aparece en **Míos** con "Reclamado por <agente>".
+5. Seguir un caso (propio o de otro) → aparece en **Siguiendo**; dejar de seguir lo saca.
+6. PUT prioridad/estado (Resuelto con confirmación).
+7. Responder y verificar hilo cruzado en app viajero.
+8. Sesión persistente al recargar; logout limpia todo.
