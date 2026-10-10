@@ -4,7 +4,8 @@ import {
   Keyboard, KeyboardAvoidingView, Platform,
   Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
-import { theme } from './theme';
+import { theme } from './theme.js';
+import { API_WARNING } from './api.js';
 
 export function AppButton({ title, onPress, loading, variant }) {
   const primary = variant !== 'ghost';
@@ -64,6 +65,17 @@ export function ErrorBanner({ message }) {
   return (
     <View style={styles.error} accessibilityRole="alert">
       <Text style={styles.errorText}>{message}</Text>
+    </View>
+  );
+}
+
+// Aviso de configuracion: la URL de la API quedo en localhost y no sirve
+// desde un celular real.
+export function ApiWarning() {
+  if (!API_WARNING) return null;
+  return (
+    <View style={styles.warning} accessibilityRole="alert">
+      <Text style={styles.warningText}>{API_WARNING}</Text>
     </View>
   );
 }
@@ -163,6 +175,8 @@ const styles = StyleSheet.create({
   eyeText: { color: theme.colors.primary, fontWeight: 'bold' },
   error: { backgroundColor: '#FDECEC', borderWidth: 1, borderColor: theme.colors.critical, borderRadius: theme.radius.md, padding: theme.spacing.sm },
   errorText: { color: theme.colors.critical, fontSize: theme.type.caption },
+  warning: { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: theme.colors.warning, borderRadius: theme.radius.md, padding: theme.spacing.sm },
+  warningText: { color: theme.colors.text, fontSize: theme.type.caption },
   badge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: theme.spacing.sm, paddingVertical: 4, alignSelf: 'flex-start' },
   badgeText: { fontSize: theme.type.caption, fontWeight: 'bold' },
   empty: { backgroundColor: theme.colors.card, borderRadius: theme.radius.lg, padding: theme.spacing.lg, gap: theme.spacing.sm, alignItems: 'center' },

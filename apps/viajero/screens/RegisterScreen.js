@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
-import { AppButton, AppInput, ErrorBanner, FormScrollView } from '../../shared/components';
+import { AppButton, AppInput, ApiWarning, ErrorBanner, FormScrollView } from '../../shared/components';
 
 export function RegisterScreen({ onSuccess, goLogin }) {
   const [nombre, setNombre] = useState('');
@@ -35,7 +35,7 @@ export function RegisterScreen({ onSuccess, goLogin }) {
     setLoading(true);
     try {
       const r = await api.register(nombre.trim(), email.trim().toLowerCase(), password);
-      onSuccess(r.token, r.user);
+      onSuccess(r.token, r.refresh_token, r.user);
     } catch (e) {
       setError(e.status === 409 ? 'Ese email ya está registrado. Intenta ingresar.' : e.message);
     } finally {
@@ -47,6 +47,7 @@ export function RegisterScreen({ onSuccess, goLogin }) {
     <FormScrollView style={styles.flex} contentContainerStyle={styles.root} bottomPadding={theme.spacing.lg}>
       <Text style={styles.title}>Crear cuenta</Text>
       <Text style={styles.sub}>Solo crea cuentas de viajero. Las cuentas de agente las da el equipo.</Text>
+      <ApiWarning />
       <ErrorBanner message={error} />
       <AppInput label="Nombre" value={nombre} onChangeText={setNombre} placeholder="Tu nombre" />
       <AppInput label="Email" value={email} onChangeText={setEmail} placeholder="ejemplo@ejemplo.com" keyboard="email-address" autoCap="none" />

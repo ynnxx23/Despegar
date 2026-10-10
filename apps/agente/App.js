@@ -18,6 +18,12 @@ export default function App() {
 
   async function logout() {
     try {
+      const refreshToken = await authStore.getRefreshToken();
+      if (refreshToken) api.logout(refreshToken).catch(() => {});
+    } catch (e) {
+      /* sin red: la sesion local se limpia igual */
+    }
+    try {
       await authStore.clearSession();
     } catch (e) {
       /* storage roto o no disponible: igual se limpia el estado en memoria */
@@ -52,8 +58,8 @@ export default function App() {
     })();
   }, []);
 
-  async function handleSuccess(token, nextUser) {
-    await authStore.saveSession(token, nextUser);
+  async function handleSuccess(token, refreshToken, nextUser) {
+    await authStore.saveSession(token, refreshToken, nextUser);
     setAuthToken(token);
     setUser(nextUser);
   }
