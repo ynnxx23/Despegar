@@ -1,5 +1,5 @@
 <?php
-// AuthController F2: register (solo viajero) + login + me. JWT HS256 8h.
+// AuthController: register (solo viajero) + login + refresh + logout + me. JWT HS256 8h.
 class AuthController {
   private static function issueToken(array $safeUser): string {
     $ttlH = (int)Config::get('JWT_TTL_HOURS', '8');
@@ -12,6 +12,15 @@ class AuthController {
       'iat' => $now,
       'exp' => $now + $ttlH * 3600,
     ], Config::get('JWT_SECRET', ''));
+  }
+
+  // Sesion completa: access token + refresh token opaco de larga vida.
+  private static function sesion(PDO $db, array $safeUser): array {
+    return [
+      'user' => $safeUser,
+      'token' => self::issueToken($safeUser),
+      'refresh_token' => RefreshToken::emitir($db, (int)$safeUser['id']),
+    ];
   }
 
   public static function register(PDO $db, array $body): void {
@@ -49,7 +58,7 @@ class AuthController {
       Response::error('Error interno del servidor', 500);
     }
     $safe = Usuario::toSafe($u->findById($id));
-    Response::json(['user' => $safe, 'token' => self::issueToken($safe)], 201);
+    Response::json(self::sesion($db, $safe), 201);
   }
 
   public static function login(PDO $db, array $body): void {
@@ -65,7 +74,38 @@ class AuthController {
       Response::error('Credenciales inválidas', 401);
     }
     $safe = Usuario::toSafe($row);
-    Response::json(['user' => $safe, 'token' => self::issueToken($safe)], 200);
+    Response::json(self::sesion($db, $safe), 200);
+  }
+
+  // Canjea un refresh token por un access token nuevo. El refresh se rota en el mismo paso.
+  public static function refresh(PDO $db, array $body): void {
+    $crudo = $body['refresh_token'] ?? '';
+    if (!is_string($crudo) || strlen($crudo) < 32) {
+      Response::error('Refresh token inválido', 401);
+    }
+    $rotado = RefreshToken::rotar($db, $crudo);
+    if ($rotado === null) {
+      Response::error('Refresh token inválido o expirado', 401);
+    }
+    [$usuarioId, $nuevo] = $rotado;
+    $u = new Usuario($db);
+    $row = $u->findById($usuarioId);
+    if (!$row) Response::error('Usuario no encontrado', 401);
+    $safe = Usuario::toSafe($row);
+    Response::json([
+      'user' => $safe,
+      'token' => self::issueToken($safe),
+      'refresh_token' => $nuevo,
+    ], 200);
+  }
+
+  // Revoca el refresh token: la app lo llama al cerrar sesión.
+  public static function logout(PDO $db, array $body): void {
+    $crudo = $body['refresh_token'] ?? '';
+    if (is_string($crudo) && $crudo !== '') {
+      RefreshToken::revocar($db, $crudo);
+    }
+    Response::json(['data' => ['ok' => true]], 200);
   }
 
   public static function me(PDO $db, array $claims): void {
