@@ -17,6 +17,16 @@ Celular (Expo Go)  ──HTTPS──>  Railway: servicio "api" (Dockerfile, PHP 
 | `api` | API PHP 8.2 (server embebido) | `Dockerfile` de la raíz del repo |
 | `Postgres` | PostgreSQL 18 (plugin oficial) | volumen persistente `postgres-volume` |
 
+## Archivos del repo que sostienen el deploy
+
+| Archivo | Para qué |
+|---|---|
+| `Dockerfile` | imagen `php:8.2-cli` + `pdo_pgsql`, escucha `$PORT`, 8 workers, healthcheck |
+| `.dockerignore` | excluye `backend/.env` y el resto del repo del build |
+| `.railwayignore` | qué se sube con `railway up` |
+| `deploy/init-db.ps1` | aplica schema + seeds + migraciones contra la BD remota |
+| `deploy/api-url.txt` | URL pública que las apps incrustan en el bundle |
+
 ## Variables de entorno (servicio `api`)
 
 | Variable | Valor | Nota |
@@ -72,13 +82,14 @@ las variables del servicio.
 
 ## Apuntar las apps a la nube
 
-La URL de la API se **incrusta en el bundle** de Expo al compilar, no en runtime. Por eso:
+La URL de la API se **incrusta en el bundle** de Expo al compilar, no se lee en runtime. Por eso:
 
-1. `apps/viajero/.env.railway` y `apps/agente/.env.railway` (versionados, sin secretos) con
-   `EXPO_PUBLIC_API_URL=https://api-production-88975.up.railway.app/api`.
-2. `start-viajero.cmd` / `start-agente.cmd` leen ese archivo y escriben `apps/*/.env`.
-3. **Reiniciar** Expo (doble clic en el `.cmd`): recargar la app en el celu no alcanza, porque el
-   valor viejo ya quedó dentro del bundle.
+1. `deploy/api-url.txt` (versionado, sin secretos) con la URL pública:
+   `https://api-production-88975.up.railway.app/api`.
+2. `start-viajero.cmd` / `start-agente.cmd` leen ese archivo y escriben `apps/<app>/.env`
+   con `EXPO_PUBLIC_API_URL` (los `.env` están gitignored).
+3. **Reiniciar** Expo (doble clic en el `.cmd`): recargar la app en el celu no alcanza, porque
+   el valor viejo ya quedó dentro del bundle.
 
 ### Volver al backend local
 
@@ -87,7 +98,7 @@ start-viajero.cmd local      # fuerza http://<IP-LAN>:8000/api
 start-agente.cmd local
 ```
 
-Sin argumento los scripts usan `.env.railway` si existe; si no existe, detectan la IP LAN.
+Sin argumento los scripts usan `deploy/api-url.txt`; con `local` detectan la IP LAN de la PC.
 
 ## Consideraciones
 

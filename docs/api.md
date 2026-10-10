@@ -13,14 +13,16 @@ Estructura:
 
 ```
 backend/
-  public/index.php          # router + CORS + init (única entrada)
+  public/index.php          # router + CORS + init + handler global de errores (única entrada)
   .env / .env.example       # secretos (.env gitignored, jamás commitear)
   src/Config.php            # lee .env sin librerías
   src/Database.php          # singleton PDO (ERRMODE_EXCEPTION, EMULATE_PREPARES=false)
+                             #   admite DB_* (local) o DATABASE_URL (Railway)
   src/Utils/JwtHS256.php    # JWT HS256 manual (hash_hmac + hash_equals)
   src/Utils/Response.php    # JSON uniforme {data} / {error:{code,message}}
   src/Middleware/Auth.php   # Bearer + requireRole (401/403)
-  src/Models/               # Usuario, Reserva, Incidente, Respuesta (solo SQL preparado)
+  src/Models/               # Usuario, Reserva, Incidente, GestionCaso, Respuesta
+                             #   (solo SQL preparado)
   src/Controllers/          # Auth, Itinerario, Incidentes (viajero), Admin (agente)
 db/
   schema.sql                # tablas + trigger trg_incidentes_touch + funciones
@@ -114,7 +116,7 @@ Credenciales demo (solo desarrollo): `agente@despegar.com` / `Agente123`,
 
 ## 6. Tests
 
-Requieren API en `:8000`, BD prístina (reaplicar schema+seeds antes):
+Requieren API en `:8000` y la BD local (la password del rol sale de `backend/.env`):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tests/api_f2_auth.ps1        # auth/roles/SQLi (10 checks)
@@ -127,6 +129,11 @@ Referencia: 33/33 en verde. `tests/mint_expired.php` genera JWT expirado para F7
 
 ## 7. Seguridad y límites
 
-- `PDO::prepare` en todo, `CHECK`s como defensa en profundidad, errores sin traces/SQL.
-- CORS `*` solo-dev. Secretos solo en `.env` (verificado fuera de git).
+- `PDO::prepare` en todo, `CHECK`s como defensa en profundidad, errores sin traces/SQL
+  (handler global: 500 genérico + `error_log`).
+- CORS `*` solo-dev. Secretos solo en `.env`: el `.gitignore` cubre `.env` y `.env.*`
+  (salvo `.env.example`, que va con placeholders). La `JWT_SECRET` y la password del rol
+  local se rotaron cuando se detectaron publicadas; cada developer genera las suyas.
+- La API en Railway expone la URL pública: el login y los errores del cliente HTTP no
+  muestran la URL del servidor, y cada request corta a los 8 s.
 - Sin refresh-token v1 (re-login cada 8h). Sin framework a propósito (evalúa POO/PDO).

@@ -96,15 +96,24 @@ comprensibles en cada situación (cargando, vacío, error, éxito, confirmacione
 
 Contraseñas cifradas irreversibles (nunca se guardan legibles), accesos con token firmado que
 expira, permisos por rol verificados en cada pedido y validación de todos los datos que se
-ingresan.
+ingresan. Los secretos viven fuera del repo (`.env` ignorado por git) y los que estuvieron
+publicados se rotaron.
 
 ## 12. Cómo probarlo (resumen)
 
-1. Levantar la base PostgreSQL y el sistema (`psql -f db/schema.sql -f db/seeds.sql`, `php -S 0.0.0.0:8000 -t backend/public`).
-2. Instalar dependencias de cada app (`npm install`) e iniciarlas (`npx expo start`).
-3. Abrir con Expo Go en el celular (misma Wi-Fi) apuntando a la IP de la PC.
-4. Entrar como `ana@test.com` / `Viaje1234` (viajero) y `agente@despegar.com` / `Agente123` (agente).
-5. Reportar un caso en una app y resolverlo en la otra.
+Opción rápida (la que usan las apps ahora): la API ya está desplegada en Railway, así que no
+hace falta levantar nada en la PC.
+
+1. Instalar dependencias e iniciar cada app: doble clic en `start-viajero.cmd` y
+   `start-agente.cmd` (la URL de la API sale de `deploy/api-url.txt`).
+2. Abrir con Expo Go en el celular (cualquier red: la API responde por HTTPS público).
+3. Entrar como `ana@test.com` / `Viaje1234` (viajero) y `agente@despegar.com` / `Agente123`
+   (agente). Las credenciales demo están en el repo, no en la app.
+4. Reportar un caso en una app y resolverlo en la otra (el agente puede **reclamar** el caso
+   y **seguir** los que le interesen).
+
+Opción local: levantar la base PostgreSQL y el sistema (`psql -f db/schema.sql -f db/seeds.sql`,
+`php -S 0.0.0.0:8000 -t backend/public`) y arrancar las apps con `start-*.cmd local`.
 
 Instrucciones exactas en `README.md` y detalle de pruebas en `DOC_DESARROLLO.md`.
 
