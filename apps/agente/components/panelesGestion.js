@@ -101,10 +101,18 @@ function PanelAccion({
             placeholderTextColor={theme.colors.muted}
             multiline
             textAlignVertical="top"
+            accessibilityLabel="Motivo de la derivación"
+            maxLength={MAX_MOTIVO}
           />
+          <Text style={styles.muted}>{derivacion.motivo.length}/{MAX_MOTIVO}</Text>
           <View style={styles.row}>
             <BotonEnlace onPress={derivacion.onCancelar} label="Cancelar" />
-            <BotonEnlace onPress={derivacion.onConfirmar} label="Confirmar" etiqueta="Confirmar derivación" />
+            <BotonEnlace
+              onPress={derivacion.onConfirmar}
+              label="Confirmar"
+              etiqueta="Confirmar derivación"
+              deshabilitado={!derivacion.hayElegido}
+            />
           </View>
         </View>
       )}
@@ -192,7 +200,10 @@ function PanelTriaje({ inc, sugerida, motivoSugerida, savingPut, onPrioridad, on
             placeholderTextColor={theme.colors.muted}
             multiline
             textAlignVertical="top"
+            accessibilityLabel="Motivo de la reapertura"
+            maxLength={MAX_MOTIVO}
           />
+          <Text style={styles.muted}>{reapertura.motivo.length}/{MAX_MOTIVO}</Text>
           <View style={styles.row}>
             <BotonEnlace onPress={reapertura.onCancelar} label="Cancelar" />
             <BotonEnlace onPress={reapertura.onConfirmar} label="Confirmar reapertura" />
@@ -223,6 +234,7 @@ function PanelRespuesta({ hilo, mensaje, onMensaje, savingReply, onResponder, no
         numberOfLines={3}
         textAlignVertical="top"
         maxLength={MAX_RESPUESTA}
+        accessibilityLabel="Mensaje para el viajero"
       />
       <Text style={styles.muted}>{mensaje.length}/{MAX_RESPUESTA}</Text>
       <AppButton title="Enviar respuesta" onPress={onResponder} loading={savingReply} />
@@ -271,10 +283,19 @@ function BotonSecundario({ onPress, label }) {
   );
 }
 
-function BotonEnlace({ onPress, label, etiqueta }) {
+function BotonEnlace({ onPress, label, etiqueta, deshabilitado }) {
   return (
-    <Pressable onPress={onPress} style={styles.linkBtn} accessibilityRole="button" accessibilityLabel={etiqueta ?? label}>
-      <Text style={styles.link}>{label}</Text>
+    <Pressable
+      onPress={deshabilitado ? undefined : onPress}
+      disabled={!!deshabilitado}
+      style={[styles.linkBtn, deshabilitado && styles.linkDeshabilitado]}
+      accessibilityRole="button"
+      accessibilityLabel={etiqueta ?? label}
+      accessibilityState={{ disabled: !!deshabilitado }}
+    >
+      <Text style={[styles.link, deshabilitado && styles.linkDeshabilitado]}>
+        {deshabilitado ? 'Elegí un agente' : label}
+      </Text>
     </Pressable>
   );
 }

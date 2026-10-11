@@ -89,14 +89,11 @@ class Incidente {
       );
       $st->execute([$userId, $reservaId, $tipo, $titulo, $descripcion, $sugerida, $motivo]);
     } catch (PDOException $e) {
-      // Compatibilidad si migrate_02 aun no se aplico: inserta sin sugerencia.
+      // Sin fallback silencioso: si falta la columna de sugerencia, la base esta
+      // desactualizada y hay que correr las migraciones (no perder datos en silencio).
       if (($e->errorInfo[0] ?? '') === '42703') {
-        $st = $this->db->prepare(
-          'INSERT INTO incidentes (user_id, reserva_id, tipo, titulo, descripcion) VALUES (?, ?, ?, ?, ?)'
-        );
-        $st->execute([$userId, $reservaId, $tipo, $titulo, $descripcion]);
-        $id = (int)$this->db->lastInsertId();
-        return $id;
+        error_log('incidentes: falta la columna de sugerencia. Corré db/migrate_*.sql');
+        Response::error('La base de datos está desactualizada: falta aplicar migraciones', 500);
       }
       throw $e;
     }
@@ -120,7 +117,39 @@ class Incidente {
       " creado_at ASC";
   }
 
-  public function listAll(?string $estado, ?string $prioridad, string $orden, int $limit, int $offset, ?int $agenteId = null): array {
+  /**
+   * Filtros de la cola (los mismos para listar y para contar, para que el total
+   * de la pagina coincida con lo que se ve).
+   *   estado      : 'Abierto' | 'EnGestion' | 'Resuelto' | 'activos' (todo lo no resuelto)
+   *   prioridad   : 'Baja' | 'Alta' | 'Critica' | 'sin_triar' (sin priorizar)
+   *   tipo        : uno de Incidente::TIPOS
+   *   vista       : 'mios' | 'siguiendo' (solo para la cola propia)
+   */
+  private static function filtrosSql(array $f, array &$params): string {
+    $sql = '';
+    $estado = $f['estado'] ?? null;
+    if ($estado === 'activos') {
+      $sql .= " AND i.estado <> 'Resuelto'";
+    } elseif ($estado !== null && $estado !== '') {
+      $sql .= ' AND i.estado = ?';
+      $params[] = $estado;
+    }
+    $prioridad = $f['prioridad'] ?? null;
+    if ($prioridad === 'sin_triar') {
+      $sql .= ' AND i.prioridad IS NULL';
+    } elseif ($prioridad !== null && $prioridad !== '') {
+      $sql .= ' AND i.prioridad = ?';
+      $params[] = $prioridad;
+    }
+    $tipo = $f['tipo'] ?? null;
+    if ($tipo !== null && $tipo !== '') {
+      $sql .= ' AND i.tipo = ?';
+      $params[] = $tipo;
+    }
+    return $sql;
+  }
+
+  public function listAll(array $filtros, string $orden, int $limit, int $offset, ?int $agenteId = null): array {
     // Proyeccion agente: incluye quien tiene el caso (asignado_nombre), cuantos lo siguen
     // y si el agente que consulta lo sigue (siguiendo).
     $sql = 'SELECT i.*, u.nombre AS asignado_nombre,'
@@ -133,8 +162,7 @@ class Incidente {
       $sql .= ', FALSE AS siguiendo';
     }
     $sql .= ' FROM incidentes i LEFT JOIN usuarios u ON u.id = i.asignado_a WHERE 1=1';
-    if ($estado !== null) { $sql .= ' AND i.estado = ?'; $params[] = $estado; }
-    if ($prioridad !== null) { $sql .= ' AND i.prioridad = ?'; $params[] = $prioridad; }
+    $sql .= self::filtrosSql($filtros, $params);
     if ($orden === 'urgencia') {
       $sql .= self::ordenUrgencia();
     } else {
@@ -148,11 +176,10 @@ class Incidente {
     return array_map([self::class, 'norm'], $st->fetchAll());
   }
 
-  public function countAll(?string $estado, ?string $prioridad): int {
-    $sql = 'SELECT COUNT(*) FROM incidentes WHERE 1=1';
+  public function countAll(array $filtros): int {
+    $sql = 'SELECT COUNT(*) FROM incidentes i WHERE 1=1';
     $params = [];
-    if ($estado !== null) { $sql .= ' AND estado = ?'; $params[] = $estado; }
-    if ($prioridad !== null) { $sql .= ' AND prioridad = ?'; $params[] = $prioridad; }
+    $sql .= self::filtrosSql($filtros, $params);
     $st = $this->db->prepare($sql);
     $st->execute($params);
     return (int)$st->fetchColumn();
@@ -160,36 +187,26 @@ class Incidente {
 
   // Mi cola. $vista: 'mios' (reclamados por mi), 'siguiendo' (los que sigo y no son mios)
   // o null (union: asignados + seguidos). No Resueltos salvo filtro explicito.
-  public function miCola(int $agenteId, ?string $estado, ?string $prioridad, string $orden, int $limit, int $offset, ?string $vista = null): array {
+  public function miCola(int $agenteId, array $filtros, string $orden, int $limit, int $offset, ?string $vista = null): array {
     $sql = 'SELECT i.*, u.nombre AS asignado_nombre,'
       . ' (SELECT COUNT(*) FROM incidente_seguidores s WHERE s.incidente_id = i.id) AS seguidores_count,'
       . ' EXISTS(SELECT 1 FROM incidente_seguidores s2 WHERE s2.incidente_id = i.id AND s2.agente_id = ?) AS siguiendo'
       . ' FROM incidentes i LEFT JOIN usuarios u ON u.id = i.asignado_a WHERE 1=1';
     $params = [$agenteId];
     $sql .= $this->filtroVista($vista, $agenteId, $params);
-    if ($estado !== null) {
-      $sql .= ' AND i.estado = ?';
-      $params[] = $estado;
-    } else {
-      $sql .= " AND i.estado <> 'Resuelto'";
-    }
-    if ($prioridad !== null) { $sql .= ' AND i.prioridad = ?'; $params[] = $prioridad; }
-    if ($orden === 'urgencia') {
-      $sql .= " ORDER BY" .
-        " CASE WHEN i.sla_vence_at IS NOT NULL AND i.sla_vence_at < NOW() AND i.estado <> 'Resuelto' THEN 0 ELSE 1 END ASC," .
-        " CASE WHEN i.prioridad IS NULL THEN 0 ELSE 1 END ASC," .
-        " CASE i.prioridad WHEN 'Critica' THEN 0 WHEN 'Alta' THEN 1 WHEN 'Baja' THEN 2 ELSE 3 END ASC," .
-        " i.sla_vence_at ASC NULLS LAST," .
-        " i.creado_at ASC";
-    } else {
-      $sql .= $orden === 'desc' ? ' ORDER BY i.creado_at DESC' : ' ORDER BY i.creado_at ASC';
-    }
+    $sql .= self::filtrosSql($filtros, $params);
+    $sql .= $this->ordenSql($orden);
     $sql .= ' LIMIT ? OFFSET ?';
     $params[] = $limit;
     $params[] = $offset;
     $st = $this->db->prepare($sql);
     $st->execute($params);
     return array_map([self::class, 'norm'], $st->fetchAll());
+  }
+
+  private function ordenSql(string $orden): string {
+    if ($orden === 'urgencia') return self::ordenUrgencia();
+    return $orden === 'desc' ? ' ORDER BY i.creado_at DESC' : ' ORDER BY i.creado_at ASC';
   }
 
   // Filtro de vista para mi cola (agrega params en orden).
@@ -209,32 +226,31 @@ class Incidente {
     return ' AND (i.asignado_a = ? OR EXISTS(SELECT 1 FROM incidente_seguidores s4 WHERE s4.incidente_id = i.id AND s4.agente_id = ?))';
   }
 
-  public function countMiCola(int $agenteId, ?string $estado, ?string $prioridad, ?string $vista = null): int {
+  public function countMiCola(int $agenteId, array $filtros, ?string $vista = null): int {
     $sql = 'SELECT COUNT(*) FROM incidentes i WHERE 1=1';
     $params = [];
     $sql .= $this->filtroVista($vista, $agenteId, $params);
-    if ($estado !== null) {
-      $sql .= ' AND i.estado = ?';
-      $params[] = $estado;
-    } else {
-      $sql .= " AND i.estado <> 'Resuelto'";
-    }
-    if ($prioridad !== null) { $sql .= ' AND i.prioridad = ?'; $params[] = $prioridad; }
+    $sql .= self::filtrosSql($filtros, $params);
     $st = $this->db->prepare($sql);
     $st->execute($params);
     return (int)$st->fetchColumn();
   }
 
-
-  public function update(int $id, ?string $prioridad, ?string $estado, ?int $triadoPor = null): void {
+  /**
+   * Actualiza triaje (prioridad) y/o estado.
+   * $recalculaSla: solo se renueva el reloj de SLA cuando la prioridad CAMBIA.
+   * Si no, re-guardar el caso (misma prioridad) no debe "refrescar" el SLA.
+   */
+  public function update(int $id, ?string $prioridad, ?string $estado, ?int $triadoPor = null, bool $recalculaSla = true): void {
     $sets = [];
     $params = [];
     if ($prioridad !== null) {
       $sets[] = 'prioridad = ?';
       $params[] = $prioridad;
-      // SLA: now + horas segun prioridad.
-      $horas = self::SLA_HORAS[$prioridad] ?? 72;
-      $sets[] = "sla_vence_at = NOW() + INTERVAL '{$horas} hours'";
+      if ($recalculaSla) {
+        $horas = self::SLA_HORAS[$prioridad] ?? 72;
+        $sets[] = "sla_vence_at = NOW() + INTERVAL '{$horas} hours'";
+      }
       if ($triadoPor !== null) {
         $sets[] = 'triado_por = ?';
         $params[] = $triadoPor;
@@ -248,29 +264,34 @@ class Incidente {
       $st = $this->db->prepare('UPDATE incidentes SET ' . implode(', ', $sets) . ' WHERE id = ?');
       $st->execute($params);
     } catch (PDOException $e) {
-      // Compatibilidad si migrate_02 aun no se aplico: reintenta sin triaje/SLA.
+      // Sin fallback silencioso: si faltan columnas de triaje/SLA la base esta
+      // desactualizada y hay que correr db/migrate_*.sql.
       if (($e->errorInfo[0] ?? '') === '42703') {
-        $sets = [];
-        $params = [];
-        if ($prioridad !== null) { $sets[] = 'prioridad = ?'; $params[] = $prioridad; }
-        if ($estado !== null) { $sets[] = 'estado = ?'; $params[] = $estado; }
-        if (!$sets) return;
-        $params[] = $id;
-        $st = $this->db->prepare('UPDATE incidentes SET ' . implode(', ', $sets) . ' WHERE id = ?');
-        $st->execute($params);
-        return;
+        error_log('incidentes: faltan columnas de triaje/SLA. Corré db/migrate_*.sql');
+        Response::error('La base de datos está desactualizada: falta aplicar migraciones', 500);
       }
       throw $e;
     }
   }
 
-  public function listByUser(int $userId, ?string $estado = null): array {
+  public function listByUser(int $userId, ?string $estado = null, int $limit = 100, int $offset = 0): array {
     $sql = 'SELECT * FROM incidentes WHERE user_id = ?';
     $params = [$userId];
     if ($estado !== null) { $sql .= ' AND estado = ?'; $params[] = $estado; }
-    $sql .= ' ORDER BY creado_at DESC';
+    $sql .= ' ORDER BY creado_at DESC LIMIT ? OFFSET ?';
+    $params[] = $limit;
+    $params[] = $offset;
     $st = $this->db->prepare($sql);
     $st->execute($params);
     return array_map([self::class, 'norm'], $st->fetchAll());
+  }
+
+  public function countByUser(int $userId, ?string $estado = null): int {
+    $sql = 'SELECT COUNT(*) FROM incidentes WHERE user_id = ?';
+    $params = [$userId];
+    if ($estado !== null) { $sql .= ' AND estado = ?'; $params[] = $estado; }
+    $st = $this->db->prepare($sql);
+    $st->execute($params);
+    return (int)$st->fetchColumn();
   }
 }

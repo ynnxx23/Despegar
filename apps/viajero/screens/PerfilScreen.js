@@ -2,43 +2,51 @@
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { AppButton } from '../../shared/components';
+import { etiquetaRol } from '../../shared/format';
 
 export function PerfilScreen({ user, onLogout }) {
   const nombre = String(user?.nombre || 'Viajero').trim() || 'Viajero';
   const email = String(user?.email || 'Sin email').trim() || 'Sin email';
   const inicial = (nombre || email || 'V').trim().charAt(0).toUpperCase() || 'V';
+  const rol = etiquetaRol(user?.rol);
 
+  // Cerrar sesión borra la sesión del dispositivo: se pide confirmación.
   function confirmarSalida() {
     Alert.alert(
-      'Cerrar sesion',
-      'Vas a salir de tu cuenta en este dispositivo. Podes volver a entrar cuando quieras.',
+      'Cerrar sesión',
+      'Vas a salir de tu cuenta en este dispositivo. Podés volver a entrar cuando quieras.',
       [
-        { text: 'Seguir aqui', style: 'cancel' },
-        { text: 'Cerrar sesion', style: 'destructive', onPress: () => onLogout?.() },
+        { text: 'Seguir aquí', style: 'cancel' },
+        { text: 'Cerrar sesión', style: 'destructive', onPress: () => onLogout?.() },
       ]
     );
   }
 
   return (
     <View style={styles.root}>
-      <View style={styles.perfil}>
-        <View style={styles.avatar}>
+      <View style={styles.perfil} accessible accessibilityLabel={`Perfil de ${nombre}, ${email}`}>
+        <View style={styles.avatar} importantForAccessibility="no">
           <Text style={styles.avatarText}>{inicial}</Text>
         </View>
-        <Text style={styles.nombre}>{nombre}</Text>
+        <Text style={styles.nombre} accessibilityRole="header">{nombre}</Text>
         <Text style={styles.email}>{email}</Text>
       </View>
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Mi cuenta</Text>
+      <View style={styles.card} accessible accessibilityLabel={`Mi cuenta. Email ${email}. Rol ${rol}.`}>
+        <Text style={styles.cardTitle} accessibilityRole="header">Mi cuenta</Text>
         <Text style={styles.fila}>Email: {email}</Text>
-        <Text style={styles.fila}>Rol: Viajero</Text>
+        <Text style={styles.fila}>Rol: {rol}</Text>
       </View>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Sesion</Text>
-        <Text style={styles.muted}>Si usas un dispositivo compartido, cerra la sesion al terminar.</Text>
-        <AppButton title="Cerrar sesion" onPress={confirmarSalida} variant="ghost" />
+        <Text style={styles.cardTitle} accessibilityRole="header">Sesión</Text>
+        <Text style={styles.muted}>Si usás un dispositivo compartido, cerrá la sesión al terminar.</Text>
+        <AppButton
+          title="Cerrar sesión"
+          onPress={confirmarSalida}
+          variant="ghost"
+          accessibilityLabel="Cerrar sesión de tu cuenta"
+        />
       </View>
-      <Text style={styles.version}>Version v0.1.0</Text>
+      <Text style={styles.version}>Versión v0.1.0</Text>
     </View>
   );
 }

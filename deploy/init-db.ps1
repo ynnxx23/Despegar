@@ -45,6 +45,8 @@ if ($tables -gt 0 -and -not $Force) {
   Invoke-Sql (Join-Path $db 'migrate_02_prioridad_nullable.sql')
   Invoke-Sql (Join-Path $db 'migrate_03_gestion_casos.sql')
   Invoke-Sql (Join-Path $db 'migrate_04_refresh_tokens.sql')
+  Invoke-Sql (Join-Path $db 'migrate_05_admin_auditoria.sql')
+  Invoke-Sql (Join-Path $db 'migrate_06_seed_demo_grande.sql')
 } else {
   if ($tables -gt 0) {
     Write-Host "[!] -Force: se borran y recrean las tablas." -ForegroundColor Red
@@ -54,4 +56,5 @@ if ($tables -gt 0 -and -not $Force) {
 }
 
 Write-Host "[OK] Base inicializada." -ForegroundColor Green
-Write-Host "    Usuarios demo: ana@test.com / Viaje1234 (viajera), agente@despegar.com / Agente123 (agente)"
+Write-Host "    Cuentas demo (ver datos.md): admin@despegar.com / Admin1234 (admin),"
+Write-Host "    agente@despegar.com / Agente123 (agente), ana@test.com / Viaje1234 (viajero)."

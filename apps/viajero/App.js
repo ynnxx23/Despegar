@@ -1,11 +1,12 @@
-// App viajero F5: sesión (F4) + navegación por pestañas sin librerías:
-// Itinerario · Reportar · Mis incidentes · Ayuda (+ detalle). Header con salida.
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+// App viajero: sesión compartida (apps/shared/session.js) + navegación por
+// pestañas sin librerías: Itinerario · Reportar · Mis incidentes · Ayuda (+ detalle).
+// Reglas: un error de red NO destruye la sesión (lo resuelve useSession) y las
+// pantallas de pestaña quedan montadas para no perder el borrador del reporte.
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../shared/theme';
-import { api, setAuthToken, clearAuthToken, setOnUnauthorized } from '../shared/api';
-import { authStore } from '../shared/auth';
+import { useSession } from '../shared/session';
 import { LoginScreen } from './screens/LoginScreen';
 import { RegisterScreen } from './screens/RegisterScreen';
 import { ItinerarioScreen } from './screens/ItinerarioScreen';
@@ -33,126 +34,188 @@ export default function App() {
 
 function AppShell() {
   const insets = useSafeAreaInsets();
-  const [auth, setAuth] = useState('login');
-  const [user, setUser] = useState(null);
-  const [ready, setReady] = useState(false);
+  const session = useSession({ roles: ['viajero'] });
+  const [modoAuth, setModoAuth] = useState('login');
   const [tab, setTab] = useState('itinerario');
   const [detalleId, setDetalleId] = useState(null);
   const [miosKey, setMiosKey] = useState(0);
   const [reservaPresel, setReservaPresel] = useState(null);
-  const [nuevoKey, setNuevoKey] = useState(0);
+  const [nuevoReset, setNuevoReset] = useState(0);
+  const [reportEnviado, setReportEnviado] = useState(false);
+  // Una pestaña se monta la primera vez que se abre y después nunca se desmonta:
+  // así el borrador del reporte sobrevive al cambio de pestaña.
+  const [visitados, setVisitados] = useState({ itinerario: true });
 
-  async function logout() {
-    try {
-      const refreshToken = await authStore.getRefreshToken();
-      if (refreshToken) api.logout(refreshToken).catch(() => {});
-    } catch (e) {
-      /* sin red: la sesion local se limpia igual */
-    }
-    try {
-      await authStore.clearSession();
-    } catch (e) {
-      /* storage roto o no disponible: igual se limpia el estado en memoria */
-    }
-    clearAuthToken();
-    setUser(null);
-    setAuth('login');
-    setTab('itinerario');
-    setDetalleId(null);
-    setReservaPresel(null);
+  function verTab(key) {
+    setVisitados((v) => (v[key] ? v : { ...v, [key]: true }));
   }
 
-  useEffect(() => {
-    setOnUnauthorized(() => logout());
-    (async () => {
-      try {
-        const token = await authStore.getToken();
-        const savedUser = await authStore.getUser();
-        if (token && savedUser) {
-          setAuthToken(token);
-          try {
-            const r = await api.me();
-            setUser(r.user);
-            setAuth('app');
-          } catch (e) {
-            await logout();
-          }
-        }
-      } catch (e) {
-        await logout();
-      } finally {
-        setReady(true);
-      }
-    })();
-  }, []);
+  // El formulario de reporte solo se reinicia después de un envío exitoso.
+  function limpiarFormulario() {
+    setNuevoReset((k) => k + 1);
+    setReportEnviado(false);
+  }
 
-  async function handleSuccess(token, refreshToken, nextUser) {
-    await authStore.saveSession(token, refreshToken, nextUser);
-    setAuthToken(token);
-    setUser(nextUser);
-    setAuth('app');
+  function goTab(key) {
+    verTab(key);
+    setTab(key);
+    if (key === 'nuevo' && tab !== 'nuevo' && reportEnviado) limpiarFormulario();
   }
 
   function handleReportar(reservaId) {
     setReservaPresel(reservaId ?? null);
-    setNuevoKey((k) => k + 1);
+    verTab('nuevo');
+    if (reportEnviado) limpiarFormulario();
     setDetalleId(null);
     setTab('nuevo');
   }
 
-  function goTab(key) {
-    setTab(key);
-    if (key === 'nuevo') {
-      setReservaPresel(null);
-      setNuevoKey((k) => k + 1);
-    }
+  function handleCreated(id) {
+    verTab('mios');
+    setDetalleId(id);
+    setTab('mios');
   }
 
-  if (!ready) {
-    return <View style={[styles.center, { paddingTop: insets.top, paddingBottom: insets.bottom }]}><ActivityIndicator color={theme.colors.primary} /></View>;
+  async function salir() {
+    await session.logout();
+    setTab('itinerario');
+    setDetalleId(null);
+    setReservaPresel(null);
+    setReportEnviado(false);
+    setMiosKey(0);
+    setModoAuth('login');
   }
-  if (auth !== 'app' || !user) {
+
+  // Salir es una acción destructiva: se pide confirmación.
+  function confirmarSalida() {
+    Alert.alert(
+      'Cerrar sesión',
+      'Vas a salir de tu cuenta en este dispositivo. Podés volver a entrar cuando quieras.',
+      [
+        { text: 'Seguir aquí', style: 'cancel' },
+        { text: 'Cerrar sesión', style: 'destructive', onPress: salir },
+      ]
+    );
+  }
+
+  function renderPantalla(key) {
+    if (key === 'itinerario') return <ItinerarioScreen onReportar={handleReportar} />;
+    if (key === 'nuevo') {
+      return (
+        <NuevoIncidenteScreen
+          reservaIdInicial={reservaPresel}
+          resetKey={nuevoReset}
+          onCreated={handleCreated}
+          onEnviado={() => setReportEnviado(true)}
+        />
+      );
+    }
+    if (key === 'mios') {
+      return (
+        <MisIncidentesScreen onOpen={setDetalleId} refreshKey={miosKey} onReportar={handleReportar} />
+      );
+    }
+    if (key === 'perfil') return <PerfilScreen user={session.user} onLogout={confirmarSalida} />;
+    return <AyudaScreen />;
+  }
+
+  if (session.estado === 'cargando') {
     return (
-      <View style={[styles.authRoot, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-        {auth === 'register'
-          ? <RegisterScreen onSuccess={handleSuccess} goLogin={() => setAuth('login')} />
-          : <LoginScreen onSuccess={handleSuccess} goRegister={() => setAuth('register')} />}
+      <View style={[styles.center, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        <ActivityIndicator color={theme.colors.primary} accessibilityLabel="Cargando la sesión" />
       </View>
     );
   }
 
+  if (session.estado !== 'app' || !session.user) {
+    return (
+      <View style={[styles.authRoot, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        {modoAuth === 'register' ? (
+          <RegisterScreen
+            onSuccess={(token, refresh, user) => session.login(token, refresh, user)}
+            goLogin={() => setModoAuth('login')}
+          />
+        ) : (
+          <LoginScreen
+            onSuccess={(token, refresh, user) => session.login(token, refresh, user)}
+            goRegister={() => setModoAuth('register')}
+          />
+        )}
+      </View>
+    );
+  }
+
+  const user = session.user;
   const inicial = String(user?.nombre || user?.email || 'V').trim().charAt(0).toUpperCase() || 'V';
 
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md }]}>
         <View style={styles.userRow}>
-          <View style={styles.avatar}>
+          <View style={styles.avatar} accessible accessibilityLabel={`Perfil de ${user?.nombre || 'viajero'}`}>
             <Text style={styles.avatarText}>{inicial}</Text>
           </View>
           <Text style={styles.hello}>Hola, {user?.nombre || 'Viajero'}</Text>
         </View>
-        <Pressable onPress={logout} accessibilityRole="button"><Text style={styles.exit}>Salir</Text></Pressable>
+        <Pressable
+          onPress={confirmarSalida}
+          accessibilityRole="button"
+          accessibilityLabel="Salir de la cuenta"
+          style={styles.exitBtn}
+        >
+          <Text style={styles.exit}>Salir</Text>
+        </Pressable>
       </View>
+
+      {session.sinConexion && (
+        <View style={styles.sinConexion} accessibilityRole="alert" accessibilityLiveRegion="polite">
+          <Text style={styles.sinConexionTexto}>
+            Sin conexión con el servidor. Podés seguir usando la app; los datos se actualizan al volver la señal.
+          </Text>
+          <Pressable
+            onPress={session.reintentar}
+            accessibilityRole="button"
+            accessibilityLabel="Reintentar la conexión con el servidor"
+            style={styles.reintentar}
+          >
+            <Text style={styles.reintentarTexto}>Reintentar</Text>
+          </Pressable>
+        </View>
+      )}
+
       <View style={styles.body}>
-        {detalleId !== null ? (
-          <DetalleIncidenteScreen id={detalleId} onBack={() => { setDetalleId(null); setMiosKey((k) => k + 1); }} />
-        ) : tab === 'itinerario' ? (
-          <ItinerarioScreen onReportar={handleReportar} />
-        ) : tab === 'nuevo' ? (
-          <NuevoIncidenteScreen key={nuevoKey} reservaIdInicial={reservaPresel} onCreated={(id) => { setDetalleId(id); setTab('mios'); }} />
-        ) : tab === 'mios' ? (
-          <MisIncidentesScreen onOpen={setDetalleId} refreshKey={miosKey} onReportar={handleReportar} />
-        ) : tab === 'perfil' ? (
-          <PerfilScreen user={user} onLogout={logout} />
-        ) : (
-          <AyudaScreen />
+        {TABS.filter((t) => visitados[t.key]).map((t) => (
+          <View
+            key={t.key}
+            style={[styles.pane, tab !== t.key && styles.paneOculto]}
+            pointerEvents={tab === t.key ? 'auto' : 'none'}
+            accessibilityElementsHidden={tab !== t.key}
+            importantForAccessibility={tab === t.key ? 'auto' : 'no-hide-descendants'}
+          >
+            {renderPantalla(t.key)}
+          </View>
+        ))}
+        {detalleId !== null && (
+          <View style={styles.detalle}>
+            <DetalleIncidenteScreen
+              id={detalleId}
+              onBack={() => { setDetalleId(null); setMiosKey((k) => k + 1); }}
+            />
+          </View>
         )}
       </View>
+
       {detalleId === null && (
         <View style={[styles.tabs, { paddingBottom: insets.bottom, minHeight: 56 + insets.bottom }]}>
           {TABS.map((t) => (
-            <Pressable key={t.key} onPress={() => goTab(t.key)} style={[styles.tab, tab === t.key && styles.tabActive]} accessibilityRole="button" accessibilityLabel={`Ir a ${t.label}`} accessibilityState={{ selected: tab === t.key }}>
+            <Pressable
+              key={t.key}
+              onPress={() => goTab(t.key)}
+              style={[styles.tab, tab === t.key && styles.tabActive]}
+              accessibilityRole="button"
+              accessibilityLabel={`Ir a ${t.label}`}
+              accessibilityState={{ selected: tab === t.key }}
+            >
               <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
             </Pressable>
           ))}
@@ -171,8 +234,25 @@ const styles = StyleSheet.create({
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#fff', fontWeight: 'bold', fontSize: theme.type.subtitle },
   hello: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text },
-  exit: { color: theme.colors.primary, fontWeight: 'bold', minHeight: theme.touch, textAlignVertical: 'center' },
+  exitBtn: { minHeight: theme.touch, justifyContent: 'center', paddingHorizontal: theme.spacing.sm },
+  exit: { color: theme.colors.primary, fontWeight: 'bold' },
+  sinConexion: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: theme.colors.warning,
+    borderRadius: theme.radius.md,
+    marginHorizontal: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+    padding: theme.spacing.sm,
+    gap: 4,
+  },
+  sinConexionTexto: { color: theme.colors.text, fontSize: theme.type.caption },
+  reintentar: { minHeight: 44, justifyContent: 'center' },
+  reintentarTexto: { color: theme.colors.warning, fontSize: theme.type.caption, fontWeight: 'bold' },
   body: { flex: 1 },
+  pane: { flex: 1 },
+  paneOculto: { display: 'none' },
+  detalle: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.background },
   tabs: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.card },
   tab: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center' },
   tabActive: { borderTopWidth: 3, borderTopColor: theme.colors.primary },

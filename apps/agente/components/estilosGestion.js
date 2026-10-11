@@ -39,4 +39,5 @@ export const styles = StyleSheet.create({
   avisoTexto: { color: theme.colors.text, fontSize: theme.type.caption, fontWeight: 'bold' },
   linkBtn: { minHeight: 44, justifyContent: 'center' },
   link: { color: theme.colors.primary, fontWeight: 'bold' },
+  linkDeshabilitado: { color: theme.colors.muted, opacity: 0.6 },
 });

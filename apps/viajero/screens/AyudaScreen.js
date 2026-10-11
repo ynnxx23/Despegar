@@ -83,36 +83,45 @@ export function AyudaScreen() {
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Ayuda</Text>
+      <Text style={styles.title} accessibilityRole="header">Ayuda</Text>
       <Text style={styles.sub}>Preguntas frecuentes y contacto de soporte.</Text>
       {PREGUNTAS.map((f, i) => {
         const open = abierta === i;
         return (
           <View key={f.q} style={styles.card}>
-            <Pressable onPress={() => toggle(i)} accessibilityRole="button" style={styles.fila}>
+            <Pressable
+              onPress={() => toggle(i)}
+              accessibilityRole="button"
+              accessibilityLabel={f.q}
+              accessibilityHint={open ? 'Oculta la respuesta' : 'Muestra la respuesta'}
+              accessibilityState={{ expanded: open }}
+              style={styles.fila}
+            >
               <Text style={styles.pregunta}>{f.q}</Text>
-              <Text style={styles.signo}>{open ? '−' : '+'}</Text>
+              <Text style={styles.signo} importantForAccessibility="no">{open ? '−' : '+'}</Text>
             </Pressable>
-            {open && <Text style={styles.respuesta}>{f.a}</Text>}
+            {open ? (
+              <Text style={styles.respuesta} accessibilityLiveRegion="polite">{f.a}</Text>
+            ) : null}
           </View>
         );
       })}
-      <View style={styles.card}>
-        <Text style={styles.pregunta}>Quién atiende mi caso</Text>
+      <View style={styles.card} accessible accessibilityLabel="Quién atiende mi caso">
+        <Text style={styles.pregunta} accessibilityRole="header">Quién atiende mi caso</Text>
         <Text style={styles.respuesta}>
           Tu reporte lo toma un agente del equipo de soporte. Ni bien se asigna, ves "Lo atiende" con su nombre en tu incidente. Si aún no tiene agente, ves "En revisión por el equipo". Todo aviso llega al detalle de tu caso, no hace falta llamar.
         </Text>
       </View>
-      <View style={styles.card}>
-        <Text style={styles.pregunta}>Contacto de soporte</Text>
+      <View style={styles.card} accessible accessibilityLabel="Contacto de soporte">
+        <Text style={styles.pregunta} accessibilityRole="header">Contacto de soporte</Text>
         <Text style={styles.respuesta}>
           Escribinos desde la pestaña Reportar y te contestamos en la app, en Mis incidentes. Horario: todos los días de 8 a 22 h.
         </Text>
       </View>
       <View style={styles.card}>
-        <Text style={styles.pregunta}>Estado del servicio</Text>
-        <View style={styles.estado}>
-          <View style={[styles.punto, apiOk === true && styles.puntoOk, apiOk === false && styles.puntoFail]} />
+        <Text style={styles.pregunta} accessibilityRole="header">Estado del servicio</Text>
+        <View style={styles.estado} accessible accessibilityLiveRegion="polite">
+          <View style={[styles.punto, apiOk === true && styles.puntoOk, apiOk === false && styles.puntoFail]} importantForAccessibility="no" />
           <Text style={styles.respuesta}>
             {apiOk === null ? 'Consultando estado…' : apiOk ? 'Servicio disponible' : 'Servicio no disponible'}
           </Text>

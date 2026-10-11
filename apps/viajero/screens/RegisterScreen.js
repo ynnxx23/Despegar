@@ -1,9 +1,19 @@
 // Registro viajero: crea rol viajero (el backend lo impone aunque se manipule el cliente).
+// Validación alineada con backend/src/Controllers/AuthController.php:
+//   nombre 2 a 100 · email válido (máx. 160) · contraseña de 8 a 72 caracteres.
+// El servidor NO exige mayúscula ni número: el cliente tampoco las exige.
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
 import { AppButton, AppInput, ApiWarning, ErrorBanner, FormScrollView } from '../../shared/components';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const NOMBRE_MIN = 2;
+const NOMBRE_MAX = 100;
+const EMAIL_MAX = 160;
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 72;
 
 export function RegisterScreen({ onSuccess, goLogin }) {
   const [nombre, setNombre] = useState('');
@@ -11,11 +21,10 @@ export function RegisterScreen({ onSuccess, goLogin }) {
   const [password, setPassword] = useState('');
   const [confirmar, setConfirmar] = useState('');
   const [error, setError] = useState('');
+  const [errores, setErrores] = useState({});
   const [loading, setLoading] = useState(false);
 
-  const reglaLargo = password.length >= 8;
-  const reglaMayus = /[A-Z]/.test(password);
-  const reglaNum = /[0-9]/.test(password);
+  const largoOk = password.length >= PASSWORD_MIN && password.length <= PASSWORD_MAX;
 
   function filaRegla(ok, texto) {
     return (
@@ -26,18 +35,38 @@ export function RegisterScreen({ onSuccess, goLogin }) {
     );
   }
 
+  // Devuelve los errores por campo; si hay alguno, el envío no se hace.
+  function validar() {
+    const errs = {};
+    const n = nombre.trim();
+    if (n.length < NOMBRE_MIN || n.length > NOMBRE_MAX) {
+      errs.nombre = `El nombre debe tener entre ${NOMBRE_MIN} y ${NOMBRE_MAX} caracteres.`;
+    }
+    const mail = email.trim().toLowerCase();
+    if (!EMAIL_RE.test(mail)) {
+      errs.email = 'Ingresa un email válido (ej. nombre@ejemplo.com).';
+    } else if (mail.length > EMAIL_MAX) {
+      errs.email = `El email no puede superar los ${EMAIL_MAX} caracteres.`;
+    }
+    if (password.length < PASSWORD_MIN || password.length > PASSWORD_MAX) {
+      errs.password = `La contraseña debe tener entre ${PASSWORD_MIN} y ${PASSWORD_MAX} caracteres.`;
+    }
+    if (confirmar !== password) {
+      errs.confirmar = 'Las contraseñas no coinciden.';
+    }
+    setErrores(errs);
+    return Object.keys(errs).length === 0;
+  }
+
   async function submit() {
     setError('');
-    if (nombre.trim().length < 2) { setError('Ingresa tu nombre (mínimo 2 letras).'); return; }
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setError('Ingresa un email válido.'); return; }
-    if (!reglaLargo || !reglaMayus || !reglaNum) { setError('La contraseña no cumple las reglas.'); return; }
-    if (confirmar !== password) { setError('Las contraseñas no coinciden.'); return; }
+    if (!validar()) return;
     setLoading(true);
     try {
       const r = await api.register(nombre.trim(), email.trim().toLowerCase(), password);
       onSuccess(r.token, r.refresh_token, r.user);
     } catch (e) {
-      setError(e.status === 409 ? 'Ese email ya está registrado. Intenta ingresar.' : e.message);
+      setError(e?.status === 409 ? 'Ese email ya está registrado. Ingresá con tu cuenta.' : (e?.message ?? 'No se pudo crear la cuenta.'));
     } finally {
       setLoading(false);
     }
@@ -49,16 +78,57 @@ export function RegisterScreen({ onSuccess, goLogin }) {
       <Text style={styles.sub}>Solo crea cuentas de viajero. Las cuentas de agente las da el equipo.</Text>
       <ApiWarning />
       <ErrorBanner message={error} />
-      <AppInput label="Nombre" value={nombre} onChangeText={setNombre} placeholder="Tu nombre" />
-      <AppInput label="Email" value={email} onChangeText={setEmail} placeholder="ejemplo@ejemplo.com" keyboard="email-address" autoCap="none" />
-      <AppInput label="Contraseña (mín. 8)" value={password} onChangeText={setPassword} placeholder="Tu contraseña" secure autoCap="none" />
+      <AppInput
+        label="Nombre"
+        value={nombre}
+        onChangeText={setNombre}
+        placeholder="Tu nombre"
+        autoCap="words"
+        maxLen={NOMBRE_MAX}
+        error={errores.nombre}
+        required
+      />
+      <AppInput
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        placeholder="ejemplo@ejemplo.com"
+        keyboard="email-address"
+        autoCap="none"
+        noCorrect
+        maxLen={EMAIL_MAX}
+        error={errores.email}
+        required
+      />
+      <AppInput
+        label="Contraseña"
+        value={password}
+        onChangeText={setPassword}
+        placeholder="Tu contraseña"
+        secure
+        autoCap="none"
+        noCorrect
+        maxLen={PASSWORD_MAX}
+        error={errores.password}
+        hint={`Entre ${PASSWORD_MIN} y ${PASSWORD_MAX} caracteres.`}
+        required
+      />
       <View style={styles.check}>
-        {filaRegla(reglaLargo, 'Mínimo 8 caracteres')}
-        {filaRegla(reglaMayus, 'Una mayúscula')}
-        {filaRegla(reglaNum, 'Un número')}
+        {filaRegla(largoOk, `Entre ${PASSWORD_MIN} y ${PASSWORD_MAX} caracteres`)}
       </View>
-      <AppInput label="Confirmar contraseña" value={confirmar} onChangeText={setConfirmar} placeholder="Repetí tu contraseña" secure autoCap="none" />
-      {confirmar !== '' && (
+      <AppInput
+        label="Confirmar contraseña"
+        value={confirmar}
+        onChangeText={setConfirmar}
+        placeholder="Repetí tu contraseña"
+        secure
+        autoCap="none"
+        noCorrect
+        maxLen={PASSWORD_MAX}
+        error={errores.confirmar}
+        required
+      />
+      {confirmar !== '' && !errores.confirmar && (
         <Text style={confirmar === password ? styles.coincideOk : styles.coincideFail}>
           {confirmar === password ? '✓ Las contraseñas coinciden' : 'Las contraseñas no coinciden'}
         </Text>
@@ -81,5 +151,5 @@ const styles = StyleSheet.create({
   reglaTexto: { fontSize: theme.type.caption, color: theme.colors.muted },
   reglaTextoOk: { color: theme.colors.text },
   coincideOk: { fontSize: theme.type.caption, color: theme.colors.success, fontWeight: 'bold' },
-  coincideFail: { fontSize: theme.type.caption, color: theme.colors.critical },
+  coincideFail: { fontSize: theme.type.caption, color: theme.colors.criticalText, fontWeight: 'bold' },
 });

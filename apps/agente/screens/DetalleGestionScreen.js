@@ -1,6 +1,6 @@
 // Gestion del caso: carga los datos y coordina las acciones (reclamar, seguir, derivar, responder).
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
@@ -88,8 +88,15 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
   const [motivoReapertura, setMotivoReapertura] = useState('');
   const [estadoPendiente, setEstadoPendiente] = useState(null);
   const [dirty, setDirty] = useState(false);
+  const [refrescando, setRefrescando] = useState(false);
 
   const { inc, viajero, reserva, asignado, siguiendo, yo, hilo, historial } = caso;
+
+  async function refrescar() {
+    setRefrescando(true);
+    await caso.recargar();
+    setRefrescando(false);
+  }
 
   function marcarCambio() {
     if (!dirty) setDirty(true);
@@ -110,9 +117,13 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
       const incidente = payload?.incidente ?? payload;
       if (incidente?.id != null) caso.setInc(incidente);
       marcarCambio();
+      // El historial tiene que reflejar el cambio recien hecho.
+      await recargarHistorial();
+      return true;
     } catch (e) {
       if (e?.status === 400 && /prioridad/i.test(e?.message ?? '')) setAvisoPrioridad(true);
       caso.setError(e?.message ?? 'No se pudo guardar el cambio.');
+      return false;
     } finally {
       setSavingPut(false);
     }
@@ -211,6 +222,10 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
   }
 
   function confirmarDerivar() {
+    if (agenteElegido == null) {
+      caso.setError('Elegí un agente antes de confirmar la derivación.');
+      return;
+    }
     const elegido = agentes.find((a) => String(a?.id) === String(agenteElegido));
     Alert.alert('Derivar caso', `Derivás el caso #${inc?.id ?? id} a ${elegido?.nombre ?? `#${agenteElegido}`}?`, [
       { text: 'Cancelar', style: 'cancel' },
@@ -271,9 +286,12 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
         {
           text: 'Confirmar',
           onPress: async () => {
-            await put({ estado: estadoPendiente });
-            setEstadoPendiente(null);
-            setMotivoReapertura('');
+            // El motivo viaja al backend (queda en el historial del caso).
+            const ok = await put({ estado: estadoPendiente, motivo: motivoReapertura.trim() });
+            if (ok) {
+              setEstadoPendiente(null);
+              setMotivoReapertura('');
+            }
           },
         },
       ]
@@ -298,7 +316,7 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
             mensaje: nuevo.mensaje ?? texto,
             incidente_id: nuevo.incidente_id ?? id,
             creado_at: nuevo.creado_at ?? new Date().toISOString(),
-            autor: nuevo.autor ?? 'Soporte',
+            autor: nuevo.autor ?? yo?.nombre ?? 'Soporte',
             autor_rol: nuevo.autor_rol ?? 'agente',
           },
         ]));
@@ -340,6 +358,7 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
         style={styles.root}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + theme.spacing.lg }]}
         bottomPadding={insets.bottom + theme.spacing.lg}
+        refreshControl={<RefreshControl refreshing={refrescando} onRefresh={refrescar} colors={[theme.colors.primary]} />}
       >
         {avisoPrioridad && (
           <View style={styles.aviso} accessibilityRole="alert">
@@ -375,6 +394,7 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
               abierto: derivando,
               agentes,
               elegido: agenteElegido,
+              hayElegido: agenteElegido != null,
               motivo: motivoDerivar,
               onAbrir: abrirDerivar,
               onElegir: setAgenteElegido,

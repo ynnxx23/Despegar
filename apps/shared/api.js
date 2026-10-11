@@ -12,9 +12,13 @@ const BASE_URL = ENV_URL || 'http://localhost:8000/api';
 
 export const API_URL_CONFIGURED = Boolean(ENV_URL);
 export const API_HOST = String(BASE_URL).replace(/^https?:\/\//, '').split('/')[0] || 'localhost';
-export const API_WARNING = API_URL_CONFIGURED
-  ? null
-  : `No configuraste EXPO_PUBLIC_API_URL: la app apunta a ${API_HOST}, que no sirve desde un celular.`;
+const ES_HTTP = /^http:\/\//i.test(BASE_URL);
+const ES_LOCAL = /^(localhost|127\.0\.0\.1|10\.0\.2\.2|localhost:)/i.test(API_HOST);
+export const API_WARNING = !API_URL_CONFIGURED
+  ? `No configuraste EXPO_PUBLIC_API_URL: la app apunta a ${API_HOST}, que no sirve desde un celular.`
+  : (ES_HTTP && !ES_LOCAL
+    ? `Atención: la API está en HTTP (${API_HOST}). El token viaja sin cifrar: usá HTTPS.`
+    : null);
 
 // RN no aplica timeout por defecto: sin esto un paquete descartado deja la UI en
 // "Conectando…" para siempre. Corta a los 8s y devuelve error legible.
@@ -47,6 +51,21 @@ async function refrescarAccessToken() {
       .finally(() => { refrescoEnCurso = null; });
   }
   return refrescoEnCurso;
+}
+
+// Mensajes legibles por codigo HTTP (el backend devuelve un mensaje, pero
+// si la respuesta no es JSON (proxy, 502) se muestra algo entendible).
+function mensajeDeError(status, body) {
+  const delBackend = body?.error?.message;
+  if (delBackend) return delBackend;
+  if (status === 0) return 'No se pudo conectar con el servidor.';
+  if (status === 401) return 'Tu sesión venció. Volvé a entrar.';
+  if (status === 403) return 'No tenés permiso para hacer eso.';
+  if (status === 404) return 'No encontramos lo que buscabas.';
+  if (status === 409) return 'Ese cambio choca con el estado actual.';
+  if (status === 429) return 'Demasiados intentos. Esperá un momento e intentá de nuevo.';
+  if (status >= 500) return 'El servidor tiene un problema. Probá en un momento.';
+  return `HTTP ${status}`;
 }
 
 // config.sinAuth: no manda Bearer, no refresca y no dispara onUnauthorized.
@@ -82,18 +101,25 @@ async function request(path, options = {}, config = {}) {
     if (timer) clearTimeout(timer);
   }
 
+  const data = await res.json().catch(() => ({}));
+
   if (res.status === 401 && !sinAuth) {
     if (config.reintentar !== false && await refrescarAccessToken()) {
       return request(path, options, { ...config, reintentar: false });
     }
+    // Sesion vencida de verdad: se avisa al usuario con un mensaje claro
+    // (y no con un "HTTP 401" crudo).
     if (onUnauthorized) {
       try { await onUnauthorized(); } catch (e) { /* no rompe el flujo de error */ }
     }
+    const err = new Error(data?.error?.message || 'Tu sesión venció. Volvé a entrar.');
+    err.status = 401;
+    err.sesionVencida = true;
+    throw err;
   }
 
-  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data?.error?.message || `HTTP ${res.status}`);
+    const err = new Error(mensajeDeError(res.status, data));
     err.status = res.status;
     err.details = data?.error?.details;
     throw err;
