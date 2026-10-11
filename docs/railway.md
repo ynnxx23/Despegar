@@ -1,5 +1,8 @@
 # Deploy en Railway — API Despegar
 
+> Para arrancar el proyecto de cero o en otra PC: **`docs/instalacion.md`**. Este documento es
+> el detalle técnico del deploy (servicios, variables, migraciones, costo).
+
 La API queda **24/7 en la nube**, con dominio HTTPS público. El celular ya no necesita estar en
 la misma Wi-Fi que la PC ni la PC encendida: las dos apps pegan contra
 `https://api-production-88975.up.railway.app/api`.
