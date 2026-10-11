@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
-import { Badge, EmptyState, ErrorBanner, LoadingRow } from '../../shared/components';
-import { etiquetaTipo, fmtFecha } from '../../shared/format';
+import { Badge, Chip, EmptyState, ErrorBanner, LoadingRow } from '../../shared/components';
+import { etiquetaEstado, etiquetaPrioridad, etiquetaTipo, fmtFecha } from '../../shared/format';
 
 const FILTROS = [
   { key: 'Todos', label: 'Todos' },
@@ -25,7 +25,7 @@ export function MisIncidentesScreen({ onOpen, refreshKey, onReportar }) {
       const r = await api.get('/incidentes/mios');
       setData(r.data);
     } catch (e) {
-      setError(e.message);
+      setError(e?.message ?? 'No se pudieron cargar tus incidentes.');
     }
   }, []);
 
@@ -50,28 +50,22 @@ export function MisIncidentesScreen({ onOpen, refreshKey, onReportar }) {
   function header() {
     return (
       <View style={styles.headerCol}>
-        <Text style={styles.title}>Mis incidentes</Text>
+        <Text style={styles.title} accessibilityRole="header">Mis incidentes</Text>
         <Text style={styles.resumenText}>
           Abiertos {conteos.Abierto} · En gestión {conteos.EnGestion} · Resueltos {conteos.Resuelto}
         </Text>
         <View style={styles.row}>
           {FILTROS.map((f) => (
-            <Pressable
+            <Chip
               key={f.key}
+              label={`${f.label} (${conteos[f.key] ?? 0})`}
+              active={filtro === f.key}
               onPress={() => setFiltro(f.key)}
-              style={[styles.chip, filtro === f.key && styles.chipActive]}
-              accessibilityRole="button"
               accessibilityLabel={`Filtrar por ${f.label}`}
-              accessibilityState={{ selected: filtro === f.key }}
-            >
-              <Text style={[styles.chipText, filtro === f.key && styles.chipTextActive]}>
-                {f.label} ({conteos[f.key] ?? 0})
-              </Text>
-            </Pressable>
+            />
           ))}
         </View>
-        <ErrorBanner message={error} />
-        {error !== '' && <Text style={styles.retry} onPress={load}>Toca para reintentar</Text>}
+        <ErrorBanner message={error} onRetry={load} />
       </View>
     );
   }
@@ -93,17 +87,34 @@ export function MisIncidentesScreen({ onOpen, refreshKey, onReportar }) {
   function fila({ item: incidente }) {
     const atiende = incidente?.atendido_por ?? null;
     const ultima = incidente?.ultima_respuesta?.mensaje;
+    const estado = incidente?.estado;
+    // El backend no expone la prioridad real del caso: solo la sugerida.
+    const sugerida = incidente?.prioridad_sugerida ?? null;
     return (
       <Pressable
         onPress={() => onOpen(incidente?.id)}
         style={styles.card}
         accessibilityRole="button"
-        accessibilityLabel={`Abrir incidente ${incidente?.id}`}
+        accessibilityLabel={`Abrir incidente ${incidente?.id}: ${incidente?.titulo ?? 'sin título'}`}
+        accessibilityHint="Muestra el detalle y las respuestas de soporte"
       >
         <Text style={styles.cardTitle}>#{incidente?.id} · {incidente?.titulo}</Text>
         <Text style={styles.muted}>{etiquetaTipo(incidente?.tipo)} · {fmtFecha(incidente?.creado_at)}</Text>
+        <View style={styles.badges}>
+          <Badge
+            text={etiquetaEstado(estado)}
+            color={theme.status?.[estado] || theme.colors.muted}
+            label="Estado"
+          />
+          {sugerida ? (
+            <Badge
+              text={etiquetaPrioridad(sugerida)}
+              color={theme.priority?.[sugerida] || theme.colors.muted}
+              label="Prioridad estimada"
+            />
+          ) : null}
+        </View>
         {atiende ? <Text style={styles.atiende}>Atiende: {atiende}</Text> : null}
-        <Badge text={incidente?.estado} color={theme.status?.[incidente?.estado] || theme.colors.muted} />
         {ultima ? (
           <Text style={styles.preview} numberOfLines={2}>
             {incidente?.ultima_respuesta?.autor ? `${incidente.ultima_respuesta.autor}: ` : ''}{ultima}
@@ -118,7 +129,7 @@ export function MisIncidentesScreen({ onOpen, refreshKey, onReportar }) {
       style={styles.root}
       contentContainerStyle={styles.content}
       data={visibles}
-      keyExtractor={(i) => String(i?.id)}
+      keyExtractor={(i, idx) => String(i?.id ?? idx)}
       renderItem={fila}
       ListHeaderComponent={header()}
       ListEmptyComponent={vacio()}
@@ -132,15 +143,11 @@ const styles = StyleSheet.create({
   content: { padding: theme.spacing.lg, gap: theme.spacing.md },
   headerCol: { gap: theme.spacing.md },
   title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
-  retry: { color: theme.colors.primary, fontWeight: 'bold' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm },
   resumenText: { fontSize: theme.type.caption, fontWeight: 'bold', color: theme.colors.text, textAlign: 'center' },
-  chip: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 999, paddingHorizontal: theme.spacing.md, minHeight: 40, justifyContent: 'center', backgroundColor: theme.colors.card },
-  chipActive: { borderColor: theme.colors.primary, backgroundColor: '#EDE7FB' },
-  chipText: { color: theme.colors.text },
-  chipTextActive: { color: theme.colors.primary, fontWeight: 'bold' },
   card: { backgroundColor: theme.colors.card, borderRadius: theme.radius.lg, padding: theme.spacing.md, gap: 6 },
   cardTitle: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm },
   muted: { fontSize: theme.type.caption, color: theme.colors.muted },
   preview: { fontSize: theme.type.caption, color: theme.colors.muted, fontStyle: 'italic' },
   atiende: { fontSize: theme.type.caption, fontWeight: 'bold', color: theme.colors.primary },

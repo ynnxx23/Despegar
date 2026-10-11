@@ -38,6 +38,16 @@ class RefreshToken {
     $st->execute([self::hash($crudo)]);
   }
 
+  // Limpieza de tokens vencidos o revocados (la tabla no crece para siempre).
+  public static function purgar(PDO $db): void {
+    try {
+      $st = $db->prepare('DELETE FROM refresh_tokens WHERE expira_at < NOW() OR (revocado_at IS NOT NULL AND revocado_at < NOW() - INTERVAL \'7 days\')');
+      $st->execute();
+    } catch (PDOException $e) {
+      error_log('purgar refresh tokens: ' . $e->getMessage());
+    }
+  }
+
   private static function hash(string $crudo): string {
     return hash('sha256', $crudo);
   }

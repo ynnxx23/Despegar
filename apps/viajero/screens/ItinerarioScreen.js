@@ -6,6 +6,22 @@ import { api } from '../../shared/api';
 import { AppButton, EmptyState, ErrorBanner, Badge } from '../../shared/components';
 import { TIPO_RESERVA, fmtFecha } from '../../shared/format';
 
+// El estado de la reserva NO es el del incidente: no vive en theme.status.
+const COLORES_RESERVA = {
+  Confirmada: theme.colors.success,
+  Pendiente: theme.colors.warning,
+  Cancelada: theme.colors.critical,
+};
+
+function textoEstadoReserva(estado) {
+  const t = String(estado ?? '').trim();
+  return t === '' ? 'Sin estado' : t;
+}
+
+function colorEstadoReserva(estado) {
+  return COLORES_RESERVA[estado] ?? theme.colors.muted;
+}
+
 function inicioDia(d) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -39,7 +55,7 @@ export function ItinerarioScreen({ onReportar }) {
       const r = await api.get('/itinerario');
       setData(r.data);
     } catch (e) {
-      setError(e.message);
+      setError(e?.message ?? 'No se pudo cargar tu itinerario.');
     }
   }, []);
 
@@ -65,14 +81,24 @@ export function ItinerarioScreen({ onReportar }) {
   const proximo = proximos[0] ?? null;
 
   function tarjeta(r, destacada) {
+    const codigo = r?.codigo ?? 'sin código';
     return (
       <View style={destacada ? styles.destacada : styles.card}>
         {destacada && <Text style={styles.sello}>PRÓXIMO VIAJE · {textoCuenta(r)}</Text>}
-        <Text style={destacada ? styles.codigoGrande : styles.cardTitle}>{TIPO_RESERVA?.[r?.tipo] ?? r?.tipo} · {r?.codigo}</Text>
+        <Text style={destacada ? styles.codigoGrande : styles.cardTitle}>{TIPO_RESERVA?.[r?.tipo] ?? r?.tipo} · {codigo}</Text>
         <Text style={styles.body}>{rutaReserva(r)}</Text>
         <Text style={styles.muted}>{fmtFecha(r?.fecha_inicio)}{r?.fecha_fin ? ` — ${fmtFecha(r?.fecha_fin)}` : ''}{!destacada ? ` · ${textoCuenta(r)}` : ''}</Text>
-        <Badge text={r?.estado} color={theme.status?.[r?.estado] || theme.colors.muted} />
-        <AppButton title="Reportar sobre esta reserva" onPress={() => onReportar?.(r?.id)} variant="ghost" />
+        <Badge
+          text={textoEstadoReserva(r?.estado)}
+          color={colorEstadoReserva(r?.estado)}
+          label="Estado de la reserva"
+        />
+        <AppButton
+          title="Reportar sobre esta reserva"
+          onPress={() => onReportar?.(r?.id)}
+          variant="ghost"
+          accessibilityLabel={`Reportar sobre esta reserva ${codigo}`}
+        />
       </View>
     );
   }
@@ -84,10 +110,9 @@ export function ItinerarioScreen({ onReportar }) {
   function header() {
     return (
       <View style={styles.headerCol}>
-        <Text style={styles.title}>Mi itinerario</Text>
-        <ErrorBanner message={error} />
-        {error !== '' && <Text style={styles.retry} onPress={load}>Toca para reintentar</Text>}
-        {cargando && <ActivityIndicator color={theme.colors.primary} />}
+        <Text style={styles.title} accessibilityRole="header">Mi itinerario</Text>
+        <ErrorBanner message={error} onRetry={load} />
+        {cargando && <ActivityIndicator color={theme.colors.primary} accessibilityLabel="Cargando tu itinerario" />}
         {data !== null && data.length > 0 && (
           <Text style={styles.muted}>{vuelos} vuelos · {hoteles} hoteles</Text>
         )}
@@ -115,7 +140,7 @@ export function ItinerarioScreen({ onReportar }) {
       style={styles.root}
       contentContainerStyle={styles.content}
       data={filas}
-      keyExtractor={(r) => String(r?.id)}
+      keyExtractor={(r, idx) => String(r?.id ?? idx)}
       renderItem={({ item }) => tarjeta(item, false)}
       ListHeaderComponent={header()}
       ListEmptyComponent={vacio()}
@@ -130,7 +155,6 @@ const styles = StyleSheet.create({
   headerCol: { gap: theme.spacing.md },
   title: { fontSize: theme.type.title, fontWeight: 'bold', color: theme.colors.text },
   seccion: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text, marginTop: theme.spacing.sm },
-  retry: { color: theme.colors.primary, fontWeight: 'bold' },
   card: { backgroundColor: theme.colors.card, borderRadius: theme.radius.lg, padding: theme.spacing.md, gap: 4 },
   destacada: { backgroundColor: theme.colors.card, borderRadius: theme.radius.lg, padding: theme.spacing.md, gap: 6, borderWidth: 2, borderColor: theme.colors.primary },
   sello: { fontSize: theme.type.caption, fontWeight: 'bold', color: theme.colors.primary },

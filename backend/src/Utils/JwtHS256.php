@@ -35,7 +35,7 @@ class JwtHS256 {
       if (json_last_error() !== JSON_ERROR_NONE || !is_array($claims)) return null;
       // Claims obligatorios: sub numérico, rol cerrado, exp/iat enteros coherentes.
       if (!isset($claims['sub']) || !is_numeric($claims['sub'])) return null;
-      if (!in_array($claims['rol'] ?? '', ['viajero', 'agente'], true)) return null;
+      if (!in_array($claims['rol'] ?? '', ['viajero', 'agente', 'admin'], true)) return null;
       if (!isset($claims['exp']) || !is_numeric($claims['exp']) || (int)$claims['exp'] < time()) return null;
       if (isset($claims['iat']) && (!is_numeric($claims['iat']) || (int)$claims['iat'] > time() + 60)) return null;
       if (isset($claims['iss']) && (!is_string($claims['iss']) || $claims['iss'] === '')) return null;
