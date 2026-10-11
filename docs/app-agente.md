@@ -31,8 +31,9 @@ apps/agente/
     DetalleGestionScreen.js # caso: hook useCaso + acciones (reclamar, seguir, derivar, responder)
 apps/shared/                # común a ambas apps (único código compartido)
   theme.js                  # violeta #6C2BD9/#4A1FA3, fondo #F6F5FB, semántica prioridad/estado
-  api.js                    # fetch + Bearer automático + timeout 8s + onUnauthorized->logout en 401
-  auth.js                   # SecureStore (adaptador memoria testeable)
+  api.js                    # fetch + Bearer automático + timeout 8s + refresh ante 401
+                            #   (reintenta la petición) + onUnauthorized->logout si el refresh falla
+  auth.js                   # SecureStore (adaptador memoria testeable): access + refresh token
   components.js             # Button/Input/Banner/Badge/Empty/Loading/FormScrollView
   format.js                 # etiquetas legibles, estados, prioridades, fechas es-AR
 ```
@@ -76,7 +77,10 @@ Credenciales demo (la app **no** las muestra): `agente@despegar.com` / `Agente12
 
 Flujo feliz: login → cola (urgentes primero) → filtrar críticos → abrir caso →
 reclamar (aparece en **Míos**) → responder al viajero → ajustar prioridad →
-marcar Resuelto (confirmar) → verificar en resumen. 401 (expirado/inválido) → logout automático.
+marcar Resuelto (confirmar) → verificar en resumen. 401 (expirado/inválido) → la app renueva
+la sesión sola con el refresh token y reintenta; si el refresh tampoco sirve, logout automático.
+Si falta `EXPO_PUBLIC_API_URL`, el login muestra un aviso: la app quedó apuntando a
+`localhost`, que no funciona desde un celular.
 
 **Reclamar y seguir**:
 - *Reclamar* asigna el caso al agente (`asignado_a`), lo pasa a EnGestion y lo marca en la
