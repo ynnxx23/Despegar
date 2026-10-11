@@ -22,7 +22,7 @@ Sin `pdo_pgsql` igual: el health responde, el login no.
 - `apps/agente/` App 2 Centro Resolución (Expo RN) + `components/` (paneles y estilos de la gestión).
 - `apps/shared/` theme + api client + auth + componentes.
 - `deploy/` `api-url.txt` (URL pública de la API), `init-db.ps1` (schema+seeds+migraciones contra la BD de Railway) y `railway-pause.ps1` / `railway-resume.ps1` (pausar la API para dejar de facturar).
-- `docs/` `api.md`, `app-viajero.md`, `app-agente.md`, `railway.md` (deploy en la nube).
+- `docs/` `api.md`, `app-viajero.md`, `app-agente.md`, `railway.md` (deploy en la nube), `instalacion.md` (puesta en marcha: otra PC, Railway paso a paso, rutina de cada demo).
 - `Dockerfile` + `.dockerignore` imagen de producción para Railway; `.railwayignore` qué se sube.
 
 ## Dev rápido (PostgreSQL local)
