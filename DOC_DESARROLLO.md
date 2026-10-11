@@ -33,12 +33,14 @@ despegar/
     src/Utils/Response.php    # JSON uniforme {data} / {error:{code,message}}
     src/Utils/Cors.php        # CORS según CORS_ORIGIN (vacío = sin cabeceras)
     src/Middleware/Auth.php   # Bearer + requireRole (401/403) + rol revalidado contra la BD
-    src/Models/              # Usuario, Reserva, Incidente, GestionCaso, Respuesta, RefreshToken
+    src/Models/              # Usuario, Reserva, Incidente, GestionCaso, Respuesta, RefreshToken, Auditoria
                               #   (encapsulamiento + prepared)
-    src/Controllers/         # Auth, Itinerario, Incidentes (viajero), Admin (agente)
-  db/schema.sql              # schema v3: tablas + trigger + 3 funciones + 1 procedimiento
+    src/Controllers/         # Auth, Itinerario, Incidentes (viajero), Admin (agente), AdminUsuarios (admin)
+    src/Utils/               # Router (tabla de rutas + 405), RateLimit, Security (headers), Cors, JwtHS256, Response
+  db/schema.sql              # schema v4: tablas + triggers + funciones + \ir seed_demo.sql
+  db/seed_demo.sql           # procedimiento sembrar_demo() (datos de demo, idempotente)
   db/seeds.sql               # CALL sembrar_demo() (idempotente)
-  db/migrate_0*.sql          # upgrade de bases v2 (no-op sobre una base v3)
+  db/migrate_0*.sql          # upgrade de bases con un schema anterior (idempotentes)
   apps/
     shared/                  # theme.js, api.js (fetch+Bearer+timeout+refresh+401),
                               # auth.js (SecureStore), components.js (Button/Input/Banner/Badge/
@@ -148,18 +150,20 @@ incidentes 1:N respuestas, 1:N eventos, N:M agentes (seguidores). Índices: `idx
 `idx_respuestas_incidente`, `idx_eventos_incidente`, `idx_seguidores_agente`,
 `idx_refresh_tokens_usuario`.
 
-`db/schema.sql` es el schema v3 completo (base nueva = `schema.sql` + `seeds.sql`).
-`db/migrate_0*.sql` solo suben una base creada con el schema v2 y son no-op sobre una v3.
+`db/schema.sql` es el schema v4 completo (base nueva = `schema.sql` + `seeds.sql`).
+`db/migrate_05_admin_auditoria.sql` (rol `admin` + `usuarios_auditoria` + trigger) y
+`db/migrate_06_seed_demo_grande.sql` (datos de demo) suben una base con un schema anterior.
 
 | Rutina | Tipo | Finalidad real |
 |---|---|---|
 | `touch_actualizado_at()` + trigger `trg_incidentes_touch` | trigger function | Mantiene `actualizado_at` automáticamente |
 | `crear_respuesta(INT,INT,TEXT)→INT` | function | Inserta respuesta + `EnGestion` en una transacción; la usa `AdminController` |
 | `resumen_cola()` | function STABLE | Conteos por estado/prioridad para el panel |
-| `sembrar_demo()` | PROCEDURE | Seed idempotente (agente+2 viajeros+reservas+incidente); `seeds.sql` = `CALL` |
+| `sembrar_demo()` | PROCEDURE | Seed idempotente (2 admins + 4 agentes + 6 viajeros + reservas + incidentes + respuestas); `seeds.sql` = `CALL` |
+| `chequear_agente_asignado()` + trigger `trg_incidentes_agente` | trigger function | Un caso solo puede asignarse a un agente o admin |
+| `upsert_usuario/reserva/incidente/respuesta()` | functions | Helpers idempotentes del seed |
 
-Credenciales demo (solo desarrollo): `agente@despegar.com`/`Agente123`,
-`maria@despegar.com`/`Agente456`, `ana@test.com`/`Viaje1234`, `bruno@test.com`/`Viaje5678` (hashes bcrypt en BD).
+Credenciales demo (solo desarrollo): ver `datos.md` en la raiz del repo (hashes bcrypt en BD).
 
 ## 7. Autenticación y seguridad
 

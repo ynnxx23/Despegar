@@ -45,8 +45,13 @@ ni panel de agencias. Son temas de la empresa real, no de este recorte del proye
 |---|---|---|
 | Viajero | Cliente que compró un viaje | Ver su itinerario, reportar incidentes, leer las respuestas |
 | Agente | Empleado de atención al cliente | Ver todos los incidentes, priorizar, responder y resolver |
+| Administrador | Responsable del equipo de soporte | Todo lo del agente + registrar agentes, cambiar roles, activar/desactivar cuentas y auditar los cambios |
 
-Las cuentas de agente las crea el equipo (no hay registro público de agentes).
+Las cuentas de agente las crea un administrador desde el panel de la app del agente
+(no hay registro público de agentes). El registro público de la app del viajero siempre
+crea cuentas `viajero`. Cada cambio hecho por un administrador queda registrado en un
+historial (`usuarios_auditoria`) con el actor, el campo afectado y los valores
+anterior y nuevo.
 
 ## 6. Las dos aplicaciones
 
@@ -56,6 +61,8 @@ Reportar problema, Mis incidentes y detalle con las respuestas de soporte.
 **App 2 — Centro de Resolución (agentes).** Pantallas: inicio de sesión corporativo, cola de
 incidentes con filtros (estado, prioridad, orden por fecha) y resumen de conteos, y pantalla de
 gestión para cambiar prioridad/estado, responder al viajero y marcar Resuelto (con confirmación).
+Para los administradores se suma la pestaña **Administrar**: alta de agentes, cambio de roles,
+activación/desactivación de cuentas y el historial de cambios.
 
 Ambas comparten el mismo sistema central y la misma base de datos, pero cada una muestra solo
 lo suyo.
@@ -108,10 +115,13 @@ hace falta levantar nada en la PC.
 1. Instalar dependencias e iniciar cada app: doble clic en `start-viajero.cmd` y
    `start-agente.cmd` (la URL de la API sale de `deploy/api-url.txt`).
 2. Abrir con Expo Go en el celular (cualquier red: la API responde por HTTPS público).
-3. Entrar como `ana@test.com` / `Viaje1234` (viajero) y `agente@despegar.com` / `Agente123`
-   (agente). Las credenciales demo están en el repo, no en la app.
+3. Entrar como `ana@test.com` / `Viaje1234` (viajero), `agente@despegar.com` / `Agente123`
+   (agente) y `admin@despegar.com` / `Admin1234` (administrador). Todas las credenciales
+   demo están en `datos.md` (en el repo, no en la app).
 4. Reportar un caso en una app y resolverlo en la otra (el agente puede **reclamar** el caso
    y **seguir** los que le interesen).
+5. Con el administrador: abrir la pestaña **Administrar**, registrar un agente nuevo y ver
+   cómo queda registrado el cambio en el historial.
 
 Opción local: levantar la base PostgreSQL y el sistema (`psql -f db/schema.sql -f db/seeds.sql`,
 `php -S 0.0.0.0:8000 -t backend/public`) y arrancar las apps con `start-*.cmd local`.

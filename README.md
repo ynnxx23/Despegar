@@ -1,6 +1,7 @@
 # Despegar — Grupo 8 (Gestión de Incidentes Críticos)
-Ver `PLAN_DESARROLLO_DESPEGAR.md` (fuente de planificación, F0). BD **PostgreSQL 15** (schema v3 con trigger, funciones y procedimiento).
+Ver `PLAN_DESARROLLO_DESPEGAR.md` (fuente de planificación, F0). BD **PostgreSQL 15+** (schema v4 con triggers, funciones y procedimiento).
 Documentación: `DOC_PROYECTO.md` (general) y `DOC_DESARROLLO.md` (especificaciones técnicas).
+Cuentas de prueba (admins, agentes y viajeros): **`datos.md`**.
 
 ## Requisitos (qué necesita el proyecto para funcionar)
 | Componente | Versión | Verificación |
@@ -16,24 +17,30 @@ Sin PostgreSQL la API responde `/api/health` pero falla todo lo que toque la BD.
 Sin `pdo_pgsql` igual: el health responde, el login no.
 
 ## Estructura
-- `backend/` PHP 8.2 POO + PDO pgsql (sin framework). Entrada: `backend/public/index.php`. Modelos: `Usuario`, `Reserva`, `Incidente`, `GestionCaso` (asignado/seguidores/eventos), `Respuesta`, `RefreshToken`.
-- `db/` schema + seeds PostgreSQL (`schema.sql` crea tablas, trigger `trg_incidentes_touch`, funciones `touch_actualizado_at()`, `crear_respuesta()`, `resumen_cola()` y procedimiento `sembrar_demo()`; `seeds.sql` = `CALL sembrar_demo()`) + `migrate_0*.sql` (solo para bases v2).
+- `backend/` PHP 8.2 POO + PDO pgsql (sin framework). Entrada: `backend/public/index.php` (tabla de rutas con roles, 405 real y versionado `/api` + `/api/v1`). Modelos: `Usuario`, `Reserva`, `Incidente`, `GestionCaso` (asignado/seguidores/eventos), `Respuesta`, `RefreshToken`, `Auditoria` (historial de cambios de usuarios).
+- `db/` schema + seeds PostgreSQL (`schema.sql` crea tablas, triggers `trg_incidentes_touch`/`trg_incidentes_agente`, funciones `touch_actualizado_at()`, `chequear_agente_asignado()`, `crear_respuesta()`, `resumen_cola()`, helpers `upsert_*` y el procedimiento `sembrar_demo()` en `seed_demo.sql`; `seeds.sql` = `CALL sembrar_demo()`) + `migrate_0*.sql` (para bases con un schema anterior).
 - `apps/viajero/` App 1 Portal Ayuda al Viajero (Expo RN).
-- `apps/agente/` App 2 Centro Resolución (Expo RN) + `components/` (paneles y estilos de la gestión).
-- `apps/shared/` theme + api client + auth + componentes.
+- `apps/agente/` App 2 Centro Resolución (Expo RN) + `components/` (paneles y estilos de la gestión) + `screens/AdminUsuariosScreen.js` (panel de administración de usuarios, solo rol `admin`).
+- `apps/shared/` theme + api client + auth + sesión (`session.js`) + hooks (`hooks.js`) + login compartido + componentes.
 - `deploy/` `api-url.txt` (URL pública de la API), `init-db.ps1` (schema+seeds+migraciones contra la BD de Railway) y `railway-pause.ps1` / `railway-resume.ps1` (pausar la API para dejar de facturar).
-- `docs/` `api.md`, `app-viajero.md`, `app-agente.md`, `railway.md` (deploy en la nube), `instalacion.md` (puesta en marcha: otra PC, Railway paso a paso, rutina de cada demo).
-- `Dockerfile` + `.dockerignore` imagen de producción para Railway; `.railwayignore` qué se sube.
+- `docs/` `api.md`, `openapi.yaml` (contrato OpenAPI 3.0 de la API), `app-viajero.md`, `app-agente.md`, `railway.md` (deploy en la nube), `instalacion.md` (puesta en marcha: otra PC, Railway paso a paso, rutina de cada demo).
+- `tests/` suites en PowerShell (F2/F3/F7/F8) + `api.test.mjs` (suite portable en Node, 16 checks) y `api_client_refresh.test.mjs` (cliente móvil).
+- `.github/workflows/ci.yml` CI: PostgreSQL 16 + API + suites de Node en cada push.
+- `Dockerfile` + `.dockerignore` imagen de producción para Railway; `.railwayignore` qué se sube. `docker-compose.yml` levanta la API + PostgreSQL en local.
 
 ## Dev rápido (PostgreSQL local)
 Requisito PHP: extensión `pdo_pgsql` activa (`extension=pdo_pgsql` en `php.ini`).
 1. Crear rol/BD una vez (tu password, no se versiona): `createuser -U postgres -d despegar -P` y `createdb -U postgres -O despegar despegar`.
-2. Aplicar: `psql -U despegar -d despegar -f db/schema.sql -f db/seeds.sql` (base nueva: el schema ya trae los 7 tipos de incidente, la prioridad nullable y la tabla de refresh tokens).
-   Base vieja (schema v2): usar `deploy\init-db.ps1`, que corre solo seeds + migraciones.
+2. Aplicar: `psql -U despegar -d despegar -f db/schema.sql -f db/seeds.sql` (base nueva: el schema ya trae los 7 tipos de incidente, la prioridad nullable, el rol `admin`, la tabla de refresh tokens y la de auditoría).
+   Base vieja (schema anterior): usar `deploy\init-db.ps1`, que corre solo seeds + migraciones (`migrate_05_admin_auditoria.sql` y `migrate_06_seed_demo_grande.sql`, idempotentes).
 3. Copiar `backend/.env.example` a `backend/.env` y ajustar `DB_PASS` + `JWT_SECRET` (generar uno random de 32+ bytes: `openssl rand -hex 32`).
 4. `php -S localhost:8000 -t backend/public` → `GET http://localhost:8000/api/health`.
 
-Opción B con Docker (opcional): `docker compose up --build` → API `:8000`, PostgreSQL `:5432` (init automático con `db/`).
+Opción B con Docker (opcional): `docker compose up --build` → API `:8000`, PostgreSQL `:5432`.
+El compose usa el `Dockerfile` de la raíz (php:8.2-cli + `pdo_pgsql`, el mismo de Railway) y monta
+`db/schema.sql` + `db/seeds.sql` (más `db/seed_demo.sql`, que el schema incluye con `\ir`) en
+`/docker-entrypoint-initdb.d/`: la base se crea sola con el seed demo y la API espera a que PostgreSQL esté sano.
+Si el volumen `pgdata` ya existe, los scripts **no** se vuelven a correr: `docker compose down -v && docker compose up --build`.
 
 Opción C (nube, la que usan las apps ahora): API en Railway → `https://api-production-88975.up.railway.app/api`.
 PostgreSQL vive en Railway (plugin), la BD se inicializa por túnel SSH con `deploy/init-db.ps1`.
@@ -57,8 +64,11 @@ Ver `docs/railway.md`.
 | POST | `/admin/incidentes/:id/claim`, `/release`, `/derivar`, `/seguir` | agente | Tomar / liberar / derivar `{agente_id,motivo?}` / seguir (cualquier agente puede seguir un caso, tenga o no) |
 | DELETE | `/admin/incidentes/:id/seguir` | agente | Dejar de seguir |
 | GET | `/admin/incidentes/:id/historial`, `/admin/agentes`, `/admin/mi-cola?vista=mios\|siguiendo` | agente | Eventos con actor / agentes / mi cola: `mios` = lo que reclamé, `siguiendo` = lo que sigo y no es mío (sin `vista`: unión) |
+| GET/POST | `/admin/usuarios?rol=&q=&page=&limit=` | admin | Panel de administración: listar usuarios (rol, email, cantidad de incidentes, activo) |
+| PUT | `/admin/usuarios/:id` | admin | `{rol?, activo?, password?, motivo?}`: promover a agente, activar/desactivar, resetear contraseña. No deja cambiarte el propio rol ni quedarse sin admins |
+| GET | `/admin/usuarios/:id/historial`, `/admin/historial` | admin | Historial de cambios (actor, campo, valor anterior → nuevo, motivo) |
 
-Errores: 400 validación, 401 sin token/inválido/expirado, 403 rol insuficiente o recurso ajeno, 404 inexistente, 409 email duplicado.
+Errores: 400 validación, 401 sin token/inválido/expirado, 403 rol insuficiente o recurso ajeno, 404 inexistente, 405 método no permitido (header `Allow`), 409 email duplicado / caso ya asignado / no queda ningún admin, 429 cuota de peticiones excedida (`Retry-After`), 500 genérico.
 
 ## Tests (F9)
 Requieren API en `:8000`:
@@ -69,12 +79,25 @@ Requieren API en `:8000`:
 
 58 checks en verde (F2 15 · F3 20 · F7 3 · F8 20).
 
+Suite portable (Node, corre en cualquier sistema y es la que usa el CI):
+`node --test tests/api.test.mjs` — 16 checks: health + alias `/api/v1`, register 201/409, login 200/401,
+SQLi 401, `/me` 401/200, token manipulado 401, refresh de un solo uso, 404 de endpoint inexistente,
+405 con header `Allow`, 403 del viajero y del agente en los paneles de admin, panel de usuarios del
+admin (listar, crear 201, promover y el historial del cambio), auto-guard del admin (400) y
+revalidación del rol contra la BD (el token de un agente deja de servir si lo degradan: 403).
+Base configurable con `API_BASE` (por defecto `http://127.0.0.1:8000`); si la API no está levantada,
+la suite falla con el comando exacto para levantarla. Corre en ~3 s.
+
 Cliente móvil (sin API): `node --test tests/api_client_refresh.test.mjs` (renovación de sesión, header Bearer, aviso de URL) — 4 checks.
+
+CI: `.github/workflows/ci.yml` levanta PostgreSQL + la API y corre las suites de Node en cada push
+(más `php -l` de todo `backend/`; sin secrets, con valores de prueba fijos).
 
 ## Apps (manual, F5/F6)
 `cd apps/viajero && npm install && npx expo start` (idem `apps/agente`). La URL de la API sale de `EXPO_PUBLIC_API_URL`, que Expo incrusta al compilar: los `.cmd` la escriben en `apps/<app>/.env` desde `deploy/api-url.txt` (nube) o desde la IP LAN detectada (`.cmd local`); `localhost` no sirve desde el celular.
-Credenciales demo (la app **no** las muestra): viajero `ana@test.com` / `Viaje1234` (otra: `bruno@test.com` / `Viaje5678`), agente `agente@despegar.com` / `Agente123` (otra: `maria@despegar.com` / `Agente456`).
+Credenciales demo: ver **`datos.md`** (la app **no** las muestra). Hay 2 administradores, 4 agentes y 6 viajeros.
 Checklist: login/logout, itinerario con pull-refresh, crear incidente con confirmación, filtros, cola agente con resumen, **reclamar** un caso (aparece en "Míos"), **seguir** un caso (aparece en "Siguiendo"), PUT prioridad/estado (Resuelto confirma), responder y leer hilo cruzado.
+Con un admin: pestaña **Administrar** → registrar un agente nuevo, promover a agente a un usuario existente, activar/desactivar, resetear contraseña y ver el historial de cambios.
 
 ### App móvil: "Conectando…" infinito en el login
 La URL de la API se **incrusta en el bundle** al compilar (`EXPO_PUBLIC_API_URL` en `apps/*/.env`).
@@ -102,7 +125,7 @@ La URL se incrusta en el bundle al compilar: hay que **reiniciar Expo** para que
 Deploy completo en `docs/railway.md` (Dockerfile, variables, túnel SSH para el schema, costos).
 
 ## Seguridad (F10, verificado)
-bcrypt cost 10-12 + salt auto · JWT HS256 `sub/rol/iat/exp` sin secretos · refresh token opaco (la BD guarda solo su SHA-256) con rotación de un solo uso · el rol se revalida contra la BD en cada request (degradar una cuenta corta el acceso al instante) · SecureStore (no plano) · PDO prepared everywhere · 401 genérico en login · errores sin traces/SQL (handler global) · secretos solo en `.env` (`.gitignore` cubre `.env` y `.env.*` salvo `.env.example`) · los valores que estuvieron publicados se rotaron · CORS configurable (`CORS_ORIGIN`): sin valor no se manda ninguna cabecera CORS, `*` solo en dev.
+bcrypt cost 10-12 + salt auto · JWT HS256 `sub/rol/iat/exp` sin secretos · refresh token opaco (la BD guarda solo su SHA-256) con rotación de un solo uso · el rol se revalida contra la BD en cada request (degradar una cuenta corta el acceso al instante) y las cuentas desactivadas no pueden iniciar sesión · SecureStore (no plano) · PDO prepared everywhere · 401 genérico en login · errores sin traces/SQL (handler global) · secretos solo en `.env` (`.gitignore` cubre `.env` y `.env.*` salvo `.env.example`) · los valores que estuvieron publicados se rotaron · CORS configurable (`CORS_ORIGIN`): sin valor no se manda ninguna cabecera CORS, `*` solo en dev · headers de seguridad (`nosniff`, `DENY`, CSP, HSTS) · cuotas de peticiónes (login por IP y por cuenta, registro y refresh) que responden 429 con `Retry-After` · el panel de administración exige rol `admin`, no deja cambiar el propio rol ni quedarse sin admins, y **todo cambio queda en el historial** (`usuarios_auditoria`).
 
 ## Documentación
 | Doc | Qué cubre |
@@ -111,6 +134,7 @@ bcrypt cost 10-12 + salt auto · JWT HS256 `sub/rol/iat/exp` sin secretos · ref
 | [`DOC_DESARROLLO.md`](DOC_DESARROLLO.md) | stack, estructura, backend, API, apps, testing, despliegue |
 | [`PLAN_DESARROLLO_DESPEGAR.md`](PLAN_DESARROLLO_DESPEGAR.md) | plan original por fases (F0-F10) |
 | [`docs/api.md`](docs/api.md) | referencia de endpoints y BD |
+| [`docs/openapi.yaml`](docs/openapi.yaml) | contrato de la API en OpenAPI 3.0 (esquemas, errores, `Authorization: Bearer`) |
 | [`docs/app-viajero.md`](docs/app-viajero.md) | app del viajero: pantallas, flujos, checklist |
 | [`docs/app-agente.md`](docs/app-agente.md) | app del agente: pestañas, reclamar/seguir, checklist |
 | [`docs/railway.md`](docs/railway.md) | deploy en la nube y cómo apuntar las apps |
