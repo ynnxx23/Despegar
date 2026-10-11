@@ -31,8 +31,9 @@ apps/viajero/
     PerfilScreen.js         # datos de cuenta y cierre de sesión
 apps/shared/                # común a ambas apps (único código compartido)
   theme.js                  # violeta #6C2BD9/#4A1FA3, fondo #F6F5FB, spacing 8, radius 12/16, táctil 48
-  api.js                    # fetch + Bearer automático + timeout 8s + onUnauthorized->logout en 401
-  auth.js                   # SecureStore (adaptador memoria testeable)
+  api.js                    # fetch + Bearer automático + timeout 8s + refresh ante 401
+                            #   (reintenta la petición) + onUnauthorized->logout si el refresh falla
+  auth.js                   # SecureStore (adaptador memoria testeable): access + refresh token
   components.js             # Button/Input/Banner/Badge/Empty/Loading/FormScrollView
   format.js                 # etiquetas legibles, estados, prioridades, fechas es-AR
 ```
@@ -82,7 +83,11 @@ Credenciales demo (la app **no** las muestra): `ana@test.com` / `Viaje1234`
 
 Flujo feliz: login → Viajes → Reportar (elige tipo+reserva, confirma `Alert`) →
 n° reporte → Incidentes → Detalle → lee respuesta del agente → estado Resuelto.
-Header con Salir (limpia SecureStore + memoria). 401 (expirado/inválido) → logout automático.
+Header con Salir (revoca el refresh token en la API y limpia SecureStore + memoria).
+401 (expirado/inválido) → la app renueva la sesión sola con el refresh token y reintenta;
+si el refresh tampoco sirve, logout automático.
+Si falta `EXPO_PUBLIC_API_URL`, el login muestra un aviso: la app quedó apuntando a
+`localhost`, que no funciona desde un celular.
 
 ## 5. Permisos y errores visibles
 

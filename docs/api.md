@@ -20,15 +20,17 @@ backend/
                              #   admite DB_* (local) o DATABASE_URL (Railway)
   src/Utils/JwtHS256.php    # JWT HS256 manual (hash_hmac + hash_equals)
   src/Utils/Response.php    # JSON uniforme {data} / {error:{code,message}}
-  src/Middleware/Auth.php   # Bearer + requireRole (401/403)
-  src/Models/               # Usuario, Reserva, Incidente, GestionCaso, Respuesta
+  src/Utils/Cors.php        # CORS segun CORS_ORIGIN (vacio = sin cabeceras)
+  src/Middleware/Auth.php   # Bearer + requireRole (401/403) + rol revalidado contra la BD
+  src/Models/               # Usuario, Reserva, Incidente, GestionCaso, Respuesta, RefreshToken
                              #   (solo SQL preparado)
   src/Controllers/          # Auth, Itinerario, Incidentes (viajero), Admin (agente)
 db/
-  schema.sql                # tablas + trigger trg_incidentes_touch + funciones
+  schema.sql                # schema v3: tablas + trigger trg_incidentes_touch + funciones
                             # touch_actualizado_at(), crear_respuesta(), resumen_cola()
                             # + procedimiento sembrar_demo()
   seeds.sql                 # CALL sembrar_demo() (idempotente)
+  migrate_0*.sql            # solo para subir una base creada con el schema v2 (no-op en v3)
 ```
 
 ## 2. Levantar en local
@@ -37,8 +39,8 @@ db/
 # 1. Rol/BD (una vez, con TU password: no se versiona)
 createuser -U postgres -d despegar -P
 createdb -U postgres -O despegar despegar
-# 2. Schema + seeds + migraciones
-psql -U despegar -d despegar -f db/schema.sql -f db/seeds.sql -f db/migrate_02_prioridad_nullable.sql -f db/migrate_03_gestion_casos.sql
+# 2. Schema + seeds (base nueva: el schema ya trae todo)
+psql -U despegar -d despegar -f db/schema.sql -f db/seeds.sql
 # 3. Env
 copy backend\.env.example backend\.env   # ajustar JWT_SECRET (>=32 bytes)
 # 4. Servir (0.0.0.0 para alcance LAN desde el celular)
@@ -50,23 +52,32 @@ php -S 0.0.0.0:8000 -t backend/public
 Opción Docker (opcional): `docker compose up --build` → API `:8000`, PostgreSQL `:5432`.
 
 Variables `.env` (`backend/.env.example`): `DB_HOST/PORT/NAME/USER/PASS`,
-`JWT_SECRET`, `BCRYPT_COST` (10-12), `JWT_TTL_HOURS` (1-24, defecto 8).
+`JWT_SECRET`, `BCRYPT_COST` (10-12), `JWT_TTL_HOURS` (1-24, defecto 8),
+`REFRESH_TTL_DAYS` (1-90, defecto 30), `APP_ENV` (development|production),
+`CORS_ORIGIN` (vacío = sin CORS, `*` = cualquiera, o lista de orígenes separados por coma).
 
 ## 3. Auth
 
 - Registro público solo rol `viajero`. Cuentas `agente` las crea el equipo.
 - Login responde 401 genérico (no revela si el email existe).
 - JWT HS256 claims `{sub,rol,iat,exp}`, expira 8h. Header: `Authorization: Bearer <jwt>`.
-- `Auth::requireRole([...])`: 401 sin/inválido/expirado, 403 rol insuficiente o recurso ajeno.
+- `Auth::requireRole($db, [...])`: 401 sin/inválido/expirado, 403 rol insuficiente o recurso ajeno.
+  El rol se revalida contra la BD en cada request: degradar una cuenta en `usuarios.rol`
+  corta el acceso en el acto, sin esperar a que expire el token.
 - Contraseñas: `password_hash(BCRYPT)` + `password_verify`, nunca se devuelven (`toSafe`).
+- Refresh token: opaco (32 bytes random), la BD guarda solo su SHA-256. Vive 30 días
+  (`REFRESH_TTL_DAYS`), se rota en cada uso (el anterior queda revocado) y `POST /logout`
+  lo revoca. El access token va en el header; el refresh, en el cuerpo.
 
 ## 4. Endpoints (base `/api`, JSON)
 
 | Método | Ruta | Rol | Body / params | Éxito | Errores |
 |---|---|---|---|---|---|
 | GET | `/health` | — | — | 200 `{ok,service,fase}` | — |
-| POST | `/register` | público | `{nombre 2-100, email, password 8-72}` | 201 `{user,token}` (rol `viajero`) | 400, 409 |
-| POST | `/login` | público | `{email,password}` | 200 `{user,token}` | 400, 401 |
+| POST | `/register` | público | `{nombre 2-100, email, password 8-72}` | 201 `{user,token,refresh_token}` (rol `viajero`) | 400, 409 |
+| POST | `/login` | público | `{email,password}` | 200 `{user,token,refresh_token}` | 400, 401 |
+| POST | `/refresh` | público | `{refresh_token}` (rota el refresh: el usado queda revocado) | 200 `{user,token,refresh_token}` | 401 |
+| POST | `/logout` | público | `{refresh_token}` (opcional) | 200 `{data:{ok:true}}` | — |
 | GET | `/me` | auth | — | 200 `{user}` | 401 |
 | GET | `/itinerario` | viajero | — | 200 `{data:[reservas]}` | 401, 403 |
 | GET | `/incidentes/mios?estado=` | viajero | filtro opcional | 200 `{data}` | 400, 401, 403 |
@@ -100,16 +111,22 @@ Códigos: 400 validación, 401 sin token/inválido/expirado, 403 rol o recurso a
 ## 5. Base de datos (resumen operativo)
 
 Tablas: `usuarios`, `reservas` (FK `user_id` CASCADE), `incidentes`
-(FK `user_id` CASCADE, `reserva_id` SET NULL, `asignado_a` SET NULL, `triado_por` sin FK dura),
-`respuestas` (FK `incidente_id`/`autor_id` CASCADE), `incidente_eventos`
-(FK `incidente_id` CASCADE, `actor_id` SET NULL; índice `(incidente_id,creado_at)`),
-`incidente_seguidores` (PK compuesta + índice `(agente_id)`). Valores cerrados con `CHECK`:
+(FK `user_id` CASCADE, `reserva_id` SET NULL, `asignado_a` SET NULL, `triado_por` SET NULL;
+`prioridad` nullable hasta el triage), `respuestas` (FK `incidente_id`/`autor_id` CASCADE),
+`incidente_eventos` (FK `incidente_id` CASCADE, `actor_id` SET NULL; índice `(incidente_id,creado_at)`),
+`incidente_seguidores` (PK compuesta + índice `(agente_id)`),
+`refresh_tokens` (FK `usuario_id` CASCADE, `token_hash` UNIQUE, `expira_at`, `revocado_at`).
+Valores cerrados con `CHECK`:
 rol, tipo (7: `Vuelo_cancelado,Vuelo_retrasado,Hotel_sin_reserva,Equipaje,Cobro_indebido,Fraude,Otro`), prioridad (Baja/Alta/Critica — sin tilde en BD), estado
 (Abierto/EnGestion/Resuelto — `crear_respuesta()` escribe `EnGestion`).
 
 Rutinas con uso real: trigger `trg_incidentes_touch` (`actualizado_at` automático),
 `crear_respuesta()` (respuesta + cambio de estado en una transacción),
 `resumen_cola()` (conteos del panel), `sembrar_demo()` (seed idempotente).
+
+`db/schema.sql` es el schema v3 completo: una base nueva se crea con `schema.sql` + `seeds.sql`.
+`db/migrate_0*.sql` solo hacen falta para subir una base creada con el schema v2 y son no-op
+sobre una base v3.
 
 Credenciales demo (solo desarrollo): `agente@despegar.com` / `Agente123`,
 `maria@despegar.com` / `Agente456`, `ana@test.com` / `Viaje1234`, `bruno@test.com` / `Viaje5678`.
@@ -119,21 +136,27 @@ Credenciales demo (solo desarrollo): `agente@despegar.com` / `Agente123`,
 Requieren API en `:8000` y la BD local (la password del rol sale de `backend/.env`):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tests/api_f2_auth.ps1        # auth/roles/SQLi (10 checks)
+powershell -ExecutionPolicy Bypass -File tests/api_f2_auth.ps1        # auth/roles/SQLi/refresh (15 checks)
 powershell -ExecutionPolicy Bypass -File tests/api_f3_dominio.ps1     # dominio/cola/403 (20 checks)
 powershell -ExecutionPolicy Bypass -File tests/api_f7_integracion.ps1 # expirado->401 + loop viajero->agente->viajero
 powershell -ExecutionPolicy Bypass -File tests/api_f8_gestion.ps1     # gestion: sugerencia/SLA/claim/derivar/seguir/historial
+node --test tests/api_client_refresh.test.mjs                        # cliente movil: refresh/Bearer/aviso de URL (4 checks)
 ```
 
-Referencia: 33/33 en verde. `tests/mint_expired.php` genera JWT expirado para F7.
+Referencia: **58/58 en verde** (F2 15 · F3 20 · F7 3 · F8 20) más 4 del cliente móvil.
+`tests/mint_expired.php` genera JWT expirado para F7.
 
 ## 7. Seguridad y límites
 
 - `PDO::prepare` en todo, `CHECK`s como defensa en profundidad, errores sin traces/SQL
   (handler global: 500 genérico + `error_log`).
-- CORS `*` solo-dev. Secretos solo en `.env`: el `.gitignore` cubre `.env` y `.env.*`
+- CORS configurable con `CORS_ORIGIN`: vacío (defecto) no manda ninguna cabecera CORS,
+  `*` deja pasar cualquier origen (solo dev: con `APP_ENV=production` queda logged como aviso)
+  y una lista separada por comas es la allowlist. Secretos solo en `.env`: el `.gitignore` cubre `.env` y `.env.*`
   (salvo `.env.example`, que va con placeholders). La `JWT_SECRET` y la password del rol
   local se rotaron cuando se detectaron publicadas; cada developer genera las suyas.
 - La API en Railway expone la URL pública: el login y los errores del cliente HTTP no
   muestran la URL del servidor, y cada request corta a los 8 s.
-- Sin refresh-token v1 (re-login cada 8h). Sin framework a propósito (evalúa POO/PDO).
+- El rol se revalida contra la BD en cada request: degradar una cuenta corta el acceso
+  al instante. El refresh token se guarda solo hasheado y rota en cada uso.
+- Sin framework a propósito (evalúa POO/PDO).

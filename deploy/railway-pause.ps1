@@ -51,20 +51,31 @@ function Invoke-Railway([string[]]$RailwayArgs) {
   $out | ForEach-Object { Write-Host $_ -ForegroundColor DarkGray }
 }
 
-# Idempotente: si el servicio ya esta sin deployment, no lo toca.
-function Stop-Service([string]$Name) {
+# Idempotente y verificado por estado: si el servicio ya esta sin deployment, no lo toca.
+function Get-DeploymentId([string]$Name) {
   $prev = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   $raw = & $railway service status --service $Name --json 2>$null
   $ErrorActionPreference = $prev
   if ($LASTEXITCODE -eq 0 -and $raw) {
     $st = ($raw -join "`n") | ConvertFrom-Json
-    if (-not $st.deploymentId) {
-      Write-Host "    $Name ya estaba pausado (sin deployment)." -ForegroundColor DarkGray
-      return
-    }
+    if ($st.deploymentId) { return $st.deploymentId }
   }
-  Invoke-Railway @('down', '--service', $Name, '--yes')
+  return $null
+}
+
+function Stop-Service([string]$Name) {
+  if (-not (Get-DeploymentId $Name)) {
+    Write-Host "    $Name ya estaba pausado (sin deployment)." -ForegroundColor DarkGray
+    return
+  }
+  $prev = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  & $railway down --service $Name --yes 2>&1 | Out-Null
+  $ErrorActionPreference = $prev
+  Start-Sleep -Seconds 3
+  if (Get-DeploymentId $Name) { throw "no se pudo bajar el deployment de $Name" }
+  Write-Host "    $Name pausado." -ForegroundColor DarkGray
 }
 
 $railway = Find-Railway

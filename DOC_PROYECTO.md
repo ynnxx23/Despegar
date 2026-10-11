@@ -95,7 +95,8 @@ comprensibles en cada situación (cargando, vacío, error, éxito, confirmacione
 ## 11. Seguridad (resumen)
 
 Contraseñas cifradas irreversibles (nunca se guardan legibles), accesos con token firmado que
-expira, permisos por rol verificados en cada pedido y validación de todos los datos que se
+expira y se renueva solo con un refresh token, permisos por rol verificados en cada pedido
+(incluso contra la base, no solo contra el token) y validación de todos los datos que se
 ingresan. Los secretos viven fuera del repo (`.env` ignorado por git) y los que estuvieron
 publicados se rotaron.
 
