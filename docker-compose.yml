@@ -1,35 +1,69 @@
+# Despegar Grupo 8 — stack local completo con Docker.
+#   docker compose up --build      -> API en http://localhost:8000/api/health
+#                                    PostgreSQL en localhost:5432
+#
+# La API usa el Dockerfile de la raiz (php:8.2-cli + pdo_pgsql), el mismo que
+# usa Railway: el front-controller es backend/public/index.php y la base es /api.
+#
+# NOTA: los scripts de /docker-entrypoint-initdb.d/ solo corren la PRIMERA vez
+# (cuando el volumen pgdata esta vacio). Para volver a crearlos:
+#   docker compose down -v && docker compose up --build
+
 services:
   postgres:
     image: postgres:16
+    container_name: despegar-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: despegar
-      POSTGRES_USER: despegar
-      POSTGRES_PASSWORD: ${DB_PASS:-cambiar_por_tu_password_local}
+      POSTGRES_DB: ${DB_NAME:-despegar}
+      POSTGRES_USER: ${DB_USER:-despegar}
+      POSTGRES_PASSWORD: ${DB_PASS:-despegar_local}
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ../db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ../db/seeds.sql:/docker-entrypoint-initdb.d/02-seeds.sql:ro
+      # Schema + seeds. seed_demo.sql va con su nombre exacto porque schema.sql
+      # lo incluye con \ir (ruta relativa al propio script).
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/seeds.sql:/docker-entrypoint-initdb.d/02-seeds.sql:ro
+      - ./db/seed_demo.sql:/docker-entrypoint-initdb.d/seed_demo.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-despegar} -d ${DB_NAME:-despegar}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   api:
-    image: php:8.2-apache
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: despegar-api
+    restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
-      - "8000:80"
-    volumes:
-      - ../backend:/var/www/html:ro
+      - '8000:8000'
     environment:
       DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: despegar
-      DB_USER: despegar
-      DB_PASS: ${DB_PASS:-cambiar_por_tu_password_local}
-      JWT_SECRET: ${JWT_SECRET:-cambiar_por_secreto_aleatorio_de_32_bytes_minimo}
-      BCRYPT_COST: "10"
-      JWT_TTL_HOURS: "8"
-      REFRESH_TTL_DAYS: "30"
+      DB_PORT: '5432'
+      DB_NAME: ${DB_NAME:-despegar}
+      DB_USER: ${DB_USER:-despegar}
+      DB_PASS: ${DB_PASS:-despegar_local}
+      # En produccion generar uno propio: openssl rand -hex 32 (32 bytes = 64 hex).
+      JWT_SECRET: ${JWT_SECRET:-despegar_local_jwt_secret_cambiar_en_produccion}
+      BCRYPT_COST: '10'
+      JWT_TTL_HOURS: '8'
+      REFRESH_TTL_DAYS: '30'
       APP_ENV: development
-      CORS_ORIGIN: "*"
+      CORS_ORIGIN: '*'
+    healthcheck:
+      test: ['CMD', 'php', '-r', "exit(@file_get_contents('http://127.0.0.1:8000/api/health') ? 0 : 1);"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
 volumes:
   pgdata:

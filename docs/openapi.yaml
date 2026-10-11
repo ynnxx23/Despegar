@@ -1,0 +1,1231 @@
+openapi: 3.0.3
+info:
+  title: Despegar — API de gestión de incidentes críticos
+  version: '1.0.0'
+  description: |
+    API del backend (PHP 8.2 sin framework + PostgreSQL). Toda la comunicación es JSON
+    (`Content-Type: application/json`) y las rutas cuelgan de `/api`.
+
+    **Autenticación**: `Authorization: Bearer <jwt>` (JWT HS256, 8 h por defecto). El rol
+    (`viajero` | `agente` | `admin`) se revalida contra la base en cada request: si se degrada
+    una cuenta, su token deja de servir al instante.
+
+    **Versionado**: `/api/v1/...` es un alias de `/api/...` (mismo comportamiento).
+
+    **Errores**: todos los errores usan el mismo formato `{"error":{"code":<http>,"message":"..."}}`.
+    Códigos: 400 validación · 401 sin token/inválido/expirado · 403 rol insuficiente o recurso ajeno ·
+    404 inexistente · 405 método no permitido (trae `Allow`) · 409 conflicto (email duplicado, caso
+    asignado a otro, no queda ningún admin activo) · 429 rate limit (trae `Retry-After`) ·
+    500 error interno (el detalle real solo va al `error_log`).
+  license:
+    name: Uso académico — Grupo 8
+servers:
+  - url: /api
+    description: Base de la API (prefijo /api). /api/v1 es alias de /api.
+
+tags:
+  - name: Salud
+    description: Estado del servicio.
+  - name: Auth
+    description: Registro, login, refresh y sesión.
+  - name: Viajero
+    description: Itinerario e incidentes del viajero.
+  - name: Agente
+    description: Panel de gestión de casos (agente y admin).
+  - name: Admin usuarios
+    description: Administración de usuarios y auditoría (solo rol admin).
+
+paths:
+  /health:
+    get:
+      tags: [Salud]
+      summary: Estado de la API
+      description: Responde 200 aunque PostgreSQL esté caído (no consulta la base).
+      security: []
+      responses:
+        '200':
+          description: La API está viva.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  service: { type: string, example: despegar-api }
+                  version: { type: string, example: v1 }
+                  roles:
+                    type: array
+                    items: { type: string, enum: [viajero, agente, admin] }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /register:
+    post:
+      tags: [Auth]
+      summary: Alta de viajero
+      description: |
+        Registro público: **siempre crea un viajero** (los agentes los crea el admin).
+        Hay rate limit por IP (10 altas por hora por defecto).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegistroRequest' }
+      responses:
+        '201':
+          description: Usuario creado (devuelve token y refresh token).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sesion' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /login:
+    post:
+      tags: [Auth]
+      summary: Login
+      description: |
+        Devuelve un access token (JWT HS256) y un refresh token opaco de un solo uso.
+        El mensaje de error es genérico: no revela si el email existe.
+        Hay rate limit por IP y por cuenta.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, example: ana@test.com }
+                password: { type: string, format: password, example: Viaje1234 }
+      responses:
+        '200':
+          description: Sesión iniciada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sesion' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: La cuenta está desactivada por un administrador.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /refresh:
+    post:
+      tags: [Auth]
+      summary: Renovar el access token
+      description: |
+        Canjea el refresh token por un access token nuevo. El refresh **rota en el mismo paso**:
+        el token usado queda revocado y no se puede reusar (401).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string, example: 62d1638c5943707f13bb408382c342a1aeb778b274cfec6d717c896e75b043fb }
+      responses:
+        '200':
+          description: Token renovado (refresh rotado).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sesion' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: La cuenta está desactivada por un administrador.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /logout:
+    post:
+      tags: [Auth]
+      summary: Cerrar sesión
+      description: Revoca el refresh token (el access token expira solo).
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: Sesión cerrada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      ok: { type: boolean, example: true }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /me:
+    get:
+      tags: [Auth]
+      summary: Sesión actual
+      description: Devuelve el usuario del token (el rol sale de la base, no del token).
+      responses:
+        '200':
+          description: Usuario de la sesión.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/Usuario' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /itinerario:
+    get:
+      tags: [Viajero]
+      summary: Reservas del viajero
+      description: Solo las reservas del dueño de la sesión.
+      responses:
+        '200':
+          description: Reservas del viajero.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Reserva' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /incidentes/mios:
+    get:
+      tags: [Viajero]
+      summary: Incidentes propios
+      parameters:
+        - name: estado
+          in: query
+          required: false
+          description: Filtro por estado.
+          schema: { type: string, enum: [Abierto, EnGestion, Resuelto] }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Incidentes del viajero (sin prioridad real).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/IncidentePublico' }
+                  total: { type: integer }
+                  page: { type: integer }
+                  limit: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /incidentes:
+    post:
+      tags: [Viajero]
+      summary: Crear un incidente
+      description: |
+        Abre el caso en estado `Abierto`, sin prioridad real (queda para triage del agente).
+        El backend calcula `prioridad_sugerida` y `prioridad_motivo`; el viajero nunca ve la
+        prioridad real.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IncidenteCreateRequest' }
+      responses:
+        '201':
+          description: Incidente creado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/IncidentePublico' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: La reserva indicada no existe o no es del viajero.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /incidentes/{id}:
+    get:
+      tags: [Viajero]
+      summary: Detalle de un incidente
+      description: |
+        El **dueño** (viajero) ve el incidente sin prioridad, con `atendido_por` y el historial
+        público. Un **agente o admin** ve la vista de gestión (incidente + usuario + reserva +
+        asignación y seguidores).
+      parameters:
+        - $ref: '#/components/parameters/IncidenteId'
+      responses:
+        '200':
+          description: Detalle del incidente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    oneOf:
+                      - $ref: '#/components/schemas/IncidenteDetalleViajero'
+                      - $ref: '#/components/schemas/IncidenteDetalleAgente'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /incidentes/{id}/respuestas:
+    get:
+      tags: [Viajero]
+      summary: Hilo de respuestas del incidente
+      description: El dueño lee su caso; el agente o admin lee cualquier caso.
+      parameters:
+        - $ref: '#/components/parameters/IncidenteId'
+      responses:
+        '200':
+          description: Respuestas del caso (de más antigua a más reciente).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Respuesta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/incidentes/resumen:
+    get:
+      tags: [Agente]
+      summary: Resumen del panel
+      responses:
+        '200':
+          description: Conteos de la cola.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        estado: { type: string, example: Abierto }
+                        prioridad: { type: string, example: Critica }
+                        total: { type: integer }
+                  sin_triar: { type: integer }
+                  vencidos: { type: integer }
+                  mios: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/incidentes:
+    get:
+      tags: [Agente]
+      summary: Cola global de incidentes
+      description: |
+        `orden=urgencia` (defecto) ordena: SLA vencido primero, después los casos sin triar
+        (`prioridad` nula), después Critica/Alta/Baja y por último los más antiguos.
+      parameters:
+        - name: estado
+          in: query
+          required: false
+          description: '`activos` = todo lo que no está Resuelto.'
+          schema: { type: string, enum: [Abierto, EnGestion, Resuelto, activos] }
+        - name: prioridad
+          in: query
+          required: false
+          description: '`sin_triar` = sin priorizar.'
+          schema: { type: string, enum: [Baja, Alta, Critica, sin_triar] }
+        - name: tipo
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/TipoIncidente' }
+        - name: orden
+          in: query
+          required: false
+          schema: { type: string, enum: [asc, desc, urgencia], default: urgencia }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Cola paginada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/IncidenteAgente' }
+                  total: { type: integer }
+                  page: { type: integer }
+                  limit: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/mi-cola:
+    get:
+      tags: [Agente]
+      summary: Mi cola (reclamados + seguidos)
+      description: |
+        `vista=mios` = los casos que reclamé; `vista=siguiendo` = los que sigo y no son míos;
+        sin `vista` = unión. Excluye los `Resueltos` salvo que se pida `?estado=Resuelto`.
+      parameters:
+        - name: vista
+          in: query
+          required: false
+          schema: { type: string, enum: [mios, siguiendo] }
+        - name: estado
+          in: query
+          required: false
+          schema: { type: string, enum: [Abierto, EnGestion, Resuelto, activos] }
+        - name: prioridad
+          in: query
+          required: false
+          schema: { type: string, enum: [Baja, Alta, Critica, sin_triar] }
+        - name: tipo
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/TipoIncidente' }
+        - name: orden
+          in: query
+          required: false
+          schema: { type: string, enum: [asc, desc, urgencia], default: urgencia }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: Cola personal paginada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/IncidenteAgente' }
+                  total: { type: integer }
+                  page: { type: integer }
+                  limit: { type: integer }
+                  vista: { type: string, nullable: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/agentes:
+    get:
+      tags: [Agente]
+      summary: Listado de agentes
+      description: Agentes y admins activos.
+      responses:
+        '200':
+          description: Agentes disponibles (para derivar un caso).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        nombre: { type: string }
+                        email: { type: string, format: email }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/incidentes/{id}:
+    get:
+      tags: [Agente]
+      summary: Ver un caso (vista de gestión)
+      parameters:
+        - $ref: '#/components/parameters/IncidenteId'
+      responses:
+        '200':
+          description: Caso con usuario, reserva, asignación y seguidores.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/IncidenteDetalleAgente' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [Agente]
+      summary: Triaje y estado del caso
+      description: |
+        Fija la prioridad (y reinicia el reloj de SLA: Critica 4 h, Alta 24 h, Baja 72 h) y/o
+        el estado. Para pasar a `Resuelto` hace falta una prioridad (400 si no hay).
+      parameters:
+        - $ref: '#/components/parameters/IncidenteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prioridad: { type: string, enum: [Baja, Alta, Critica] }
+                estado: { type: string, enum: [Abierto, EnGestion, Resuelto] }
+                motivo: { type: string, maxLength: 300 }
+      responses:
+        '200':
+          description: Caso actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/IncidenteAgente' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/incidentes/{id}/historial:
+    get:
+      tags: [Agente]
+      summary: Historial interno del caso
+      description: Eventos con el nombre del actor (creado, claim, release, derivar, seguir, dejar_seguir, responder, estado, prioridad, triaje, resuelto, reabierto).
+      parameters:
+        - $ref: '#/components/parameters/IncidenteId'
+      responses:
+        '200':
+          description: Eventos del caso.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/EventoCaso' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/incidentes/{id}/claim:
+    post:
+      tags: [Agente]
+      summary: Reclamar el caso
+      description: Asigna el caso a quien reclama y lo pasa a `EnGestion` si estaba `Abierto`. Idempotente si ya era suyo.
+      parameters:
+        - $ref: '#/components/parameters/IncidenteId'
+      responses:
+        '200':
+          description: Caso reclamado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/IncidenteAgente' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: El caso ya está asignado a otro agente.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/incidentes/{id}/release:
+    post:
+      tags: [Agente]
+      summary: Liberar el caso
+      parameters:
+        - $ref: '#/components/parameters/IncidenteId'
+      responses:
+        '200':
+          description: Caso liberado (queda sin asignar).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/IncidenteAgente' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/incidentes/{id}/derivar:
+    post:
+      tags: [Agente]
+      summary: Derivar el caso a otro agente
+      parameters:
+        - $ref: '#/components/parameters/IncidenteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agente_id]
+              properties:
+                agente_id: { type: integer, description: 'Destino con rol agente o admin.' }
+                motivo: { type: string, maxLength: 300 }
+      responses:
+        '200':
+          description: Caso derivado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/IncidenteAgente' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: El agente destino no existe o no es agente/admin.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/incidentes/{id}/seguir:
+    post:
+      tags: [Agente]
+      summary: Seguir el caso
+      description: Cualquier agente puede seguir un caso, tenga o no el caso asignado. Es idempotente.
+      parameters:
+        - $ref: '#/components/parameters/IncidenteId'
+      responses:
+        '200':
+          description: Ahora seguís el caso.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SeguimientoCaso' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [Agente]
+      summary: Dejar de seguir el caso
+      parameters:
+        - $ref: '#/components/parameters/IncidenteId'
+      responses:
+        '200':
+          description: Dejaste de seguir el caso.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SeguimientoCaso' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/incidentes/{id}/respuestas:
+    get:
+      tags: [Agente]
+      summary: Hilo del caso
+      parameters:
+        - $ref: '#/components/parameters/IncidenteId'
+      responses:
+        '200':
+          description: Respuestas del caso.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Respuesta' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Agente]
+      summary: Responder el caso
+      description: Inserta la respuesta y pasa el caso a `EnGestion` en la misma transacción.
+      parameters:
+        - $ref: '#/components/parameters/IncidenteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mensaje]
+              properties:
+                mensaje: { type: string, minLength: 2, maxLength: 2000 }
+      responses:
+        '201':
+          description: Respuesta creada.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      incidente_id: { type: integer }
+                      mensaje: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/usuarios:
+    get:
+      tags: [Admin usuarios]
+      summary: Listar usuarios
+      parameters:
+        - name: rol
+          in: query
+          required: false
+          schema: { type: string, enum: [viajero, agente, admin] }
+        - name: q
+          in: query
+          required: false
+          description: Búsqueda por nombre o email (máx. 120 caracteres).
+          schema: { type: string, maxLength: 120 }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Usuarios paginados.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/UsuarioListado' }
+                  total: { type: integer }
+                  page: { type: integer }
+                  limit: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Admin usuarios]
+      summary: Crear un usuario
+      description: 'Alta desde el panel: acá sí se puede elegir el rol (agente, viajero o admin).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UsuarioCreateRequest' }
+      responses:
+        '201':
+          description: Usuario creado (queda auditado).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Usuario' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: El email ya está registrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/usuarios/{id}:
+    put:
+      tags: [Admin usuarios]
+      summary: Actualizar un usuario
+      description: |
+        Cambio parcial: `rol`, `activo`, `password` y/o `motivo` (queda en el historial).
+        Un admin no puede cambiarse su propio rol ni desactivar su cuenta (400) y la base no
+        puede quedar sin ningún administrador activo (409).
+      parameters:
+        - $ref: '#/components/parameters/UsuarioId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rol: { type: string, enum: [viajero, agente, admin] }
+                activo: { type: boolean }
+                password: { type: string, minLength: 8, maxLength: 72 }
+                motivo: { type: string, maxLength: 300 }
+      responses:
+        '200':
+          description: Usuario actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Usuario' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: No puede quedar la base sin ningún administrador activo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/usuarios/{id}/historial:
+    get:
+      tags: [Admin usuarios]
+      summary: Historial de cambios de un usuario
+      parameters:
+        - $ref: '#/components/parameters/UsuarioId'
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Auditoría del usuario (más reciente primero).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Auditoria' }
+                  usuario: { $ref: '#/components/schemas/Usuario' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/historial:
+    get:
+      tags: [Admin usuarios]
+      summary: Feed global de auditoría
+      parameters:
+        - name: usuario_id
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+      responses:
+        '200':
+          description: Movimientos de usuarios (más recientes primero).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Auditoria' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: '`Authorization: Bearer <jwt>` (JWT HS256 con claims `sub`, `rol`, `iat`, `exp`).'
+
+  parameters:
+    IncidenteId:
+      name: id
+      in: path
+      required: true
+      description: Identificador del incidente.
+      schema: { type: integer, minimum: 1 }
+    UsuarioId:
+      name: id
+      in: path
+      required: true
+      description: Identificador del usuario.
+      schema: { type: integer, minimum: 1 }
+
+  responses:
+    BadRequest:
+      description: Datos inválidos o incompletos.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Falta el token, o el token es inválido o expirado.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: El rol no alcanza o el recurso es de otro usuario.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: El recurso no existe.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    MethodNotAllowed:
+      description: |
+        El método no existe para esa ruta. La respuesta trae el header `Allow` con los
+        métodos válidos.
+      headers:
+        Allow:
+          description: Métodos aceptados por la ruta.
+          schema: { type: string, example: GET, POST }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Conflicto con el estado actual (email duplicado, caso asignado, etc.).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: Rate limit excedido. Trae el header `Retry-After` (segundos).
+      headers:
+        Retry-After:
+          description: Segundos que hay que esperar.
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    InternalError:
+      description: Error interno del servidor (el detalle real solo queda en el log del servidor).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: integer, example: 401 }
+            message: { type: string, example: Token invalido o expirado }
+            details:
+              type: object
+              additionalProperties: true
+              description: Datos extra (por ejemplo `reintenta_en_segundos` en el 429).
+      required: [error]
+
+    Usuario:
+      type: object
+      description: Usuario sin datos sensibles (nunca se expone el hash de la contraseña).
+      properties:
+        id: { type: integer, example: 28 }
+        nombre: { type: string, example: Laura Admin }
+        email: { type: string, format: email, example: admin@despegar.com }
+        rol: { type: string, enum: [viajero, agente, admin] }
+        activo: { type: boolean, example: true }
+      required: [id, nombre, email, rol, activo]
+
+    UsuarioListado:
+      type: object
+      description: Fila del panel de usuarios (agrega contadores y fecha de alta).
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        email: { type: string, format: email }
+        rol: { type: string, enum: [viajero, agente, admin] }
+        activo: { type: boolean }
+        creado_at: { type: string, format: date-time }
+        incidentes: { type: integer, description: Casos abiertos por el usuario. }
+        asignados: { type: integer, description: Casos asignados al usuario. }
+      required: [id, nombre, email, rol, activo, incidentes, asignados]
+
+    Sesion:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/Usuario' }
+        token: { type: string, description: 'Access token JWT (Bearer).' }
+        refresh_token: { type: string, description: 'Refresh token opaco (un solo uso, rota al canjearlo).' }
+      required: [user, token, refresh_token]
+
+    RegistroRequest:
+      type: object
+      required: [nombre, email, password]
+      properties:
+        nombre: { type: string, minLength: 2, maxLength: 100, example: Ana Viajera }
+        email: { type: string, format: email, maxLength: 160, example: ana@test.com }
+        password: { type: string, format: password, minLength: 8, maxLength: 72, example: Viaje1234 }
+
+    UsuarioCreateRequest:
+      type: object
+      required: [nombre, email, password, rol]
+      properties:
+        nombre: { type: string, minLength: 2, maxLength: 100 }
+        email: { type: string, format: email, maxLength: 160 }
+        password: { type: string, format: password, minLength: 8, maxLength: 72 }
+        rol: { type: string, enum: [viajero, agente, admin], default: agente }
+
+    TipoIncidente:
+      type: string
+      enum: [Vuelo_cancelado, Vuelo_retrasado, Hotel_sin_reserva, Equipaje, Cobro_indebido, Fraude, Outro]
+
+    IncidenteCreateRequest:
+      type: object
+      required: [tipo, titulo, descripcion]
+      properties:
+        reserva_id:
+          type: integer
+          description: 'Reserva del viajero (si no es suya: 404).'
+        tipo: { $ref: '#/components/schemas/TipoIncidente' }
+        titulo: { type: string, minLength: 5, maxLength: 120 }
+        descripcion: { type: string, minLength: 10, maxLength: 2000 }
+
+    IncidenteBase:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        reserva_id: { type: integer, nullable: true }
+        tipo: { $ref: '#/components/schemas/TipoIncidente' }
+        titulo: { type: string }
+        descripcion: { type: string }
+        estado: { type: string, enum: [Abierto, EnGestion, Resuelto] }
+        prioridad_sugerida: { type: string, nullable: true, example: Alta }
+        prioridad_motivo: { type: string, nullable: true }
+        creado_at: { type: string, format: date-time }
+        actualizado_at: { type: string, format: date-time }
+
+    IncidentePublico:
+      description: 'Proyección del viajero: nunca expone la prioridad real ni el SLA.'
+      allOf:
+        - $ref: '#/components/schemas/IncidenteBase'
+        - type: object
+          properties:
+            atendido_por:
+              type: string
+              nullable: true
+              description: Nombre del agente que atiende el caso.
+            historial:
+              type: array
+              description: Historial público del caso (sin motivos internos).
+              items:
+                type: object
+                properties:
+                  texto: { type: string, example: El equipo respondió }
+                  creado_at: { type: string, format: date-time }
+
+    IncidenteAgente:
+      description: 'Proyección del agente: fila completa (prioridad, triaje y SLA).'
+      allOf:
+        - $ref: '#/components/schemas/IncidenteBase'
+        - type: object
+          properties:
+            prioridad: { type: string, nullable: true, enum: [Baja, Alta, Critica] }
+            triado_por: { type: integer, nullable: true }
+            triado_at: { type: string, format: date-time, nullable: true }
+            sla_vence_at: { type: string, format: date-time, nullable: true }
+            asignado_a: { type: integer, nullable: true }
+            asignado_nombre: { type: string, nullable: true }
+            seguidores_count: { type: integer }
+            siguiendo: { type: boolean, description: 'Si el agente que consulta sigue el caso.' }
+
+    IncidenteDetalleAgente:
+      type: object
+      properties:
+        incidente: { $ref: '#/components/schemas/IncidenteAgente' }
+        usuario:
+          type: object
+          nullable: true
+          properties:
+            nombre: { type: string }
+            email: { type: string, format: email }
+        reserva:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            codigo: { type: string }
+            tipo: { type: string, enum: [vuelo, hotel] }
+            origen: { type: string, nullable: true }
+            destino: { type: string, nullable: true }
+            hotel: { type: string, nullable: true }
+        asignado:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            nombre: { type: string }
+            email: { type: string, format: email }
+        seguidores:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              nombre: { type: string }
+              email: { type: string, format: email }
+        siguiendo: { type: boolean }
+        mi_asignado: { type: boolean }
+
+    Reserva:
+      type: object
+      properties:
+        id: { type: integer }
+        tipo: { type: string, enum: [vuelo, hotel] }
+        codigo: { type: string, example: AR1234 }
+        origen: { type: string, nullable: true, example: Buenos Aires }
+        destino: { type: string, nullable: true, example: Cancun }
+        hotel: { type: string, nullable: true }
+        fecha_inicio: { type: string, format: date }
+        fecha_fin: { type: string, format: date, nullable: true }
+        estado: { type: string, example: Confirmada }
+        creado_at: { type: string, format: date-time }
+
+    Respuesta:
+      type: object
+      properties:
+        id: { type: integer }
+        mensaje: { type: string }
+        creado_at: { type: string, format: date-time }
+        autor: { type: string, example: Agente Soporte }
+        autor_rol: { type: string, enum: [viajero, agente, admin] }
+
+    EventoCaso:
+      type: object
+      description: Evento del historial interno del caso.
+      properties:
+        id: { type: integer }
+        accion: { type: string, example: claim }
+        detalle: { type: string, nullable: true }
+        creado_at: { type: string, format: date-time }
+        actor_id: { type: integer, nullable: true }
+        actor_nombre: { type: string, nullable: true }
+
+    SeguimientoCaso:
+      type: object
+      properties:
+        incidente_id: { type: integer }
+        siguiendo: { type: boolean }
+        seguidores:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              nombre: { type: string }
+              email: { type: string, format: email }
+        asignado:
+          type: object
+          nullable: true
+          properties:
+            id: { type: integer }
+            nombre: { type: string }
+            email: { type: string, format: email }
+
+    Auditoria:
+      type: object
+      description: Movimiento de usuario (alta, cambio de rol, activación, reset de contraseña).
+      properties:
+        id: { type: integer }
+        usuario_id: { type: integer, nullable: true }
+        actor_id: { type: integer, nullable: true }
+        accion:
+          type: string
+          enum: [registro_publico, crear_usuario, cambio_rol, activar, desactivar, reset_password]
+        campo: { type: string, nullable: true, example: rol }
+        valor_anterior: { type: string, nullable: true, example: viajero }
+        valor_nuevo: { type: string, nullable: true, example: agente }
+        detalle: { type: string, nullable: true }
+        creado_at: { type: string, format: date-time }
+        usuario_nombre: { type: string, nullable: true }
+        usuario_email: { type: string, format: email, nullable: true }
+        actor_nombre: { type: string, nullable: true }
+        actor_email: { type: string, format: email, nullable: true }

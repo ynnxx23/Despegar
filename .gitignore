@@ -17,4 +17,5 @@ build/
 # Datos y artefactos locales
 backend/uploads/
 backend/.env.tmp
+backend/var/
 apps/*/.env.tmp

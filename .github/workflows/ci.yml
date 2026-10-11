@@ -1,0 +1,130 @@
+name: CI
+
+# Pipeline de integración continua: levanta PostgreSQL, aplica el schema + seeds,
+# levanta la API y corre las suites de tests. No usa secrets: valores de prueba fijos.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  api:
+    name: API (PHP 8.2 + PostgreSQL 16)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Valores de prueba fijos (nada de secrets): los usa la API y el cliente psql.
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_NAME: despegar
+      DB_USER: despegar
+      DB_PASS: ci
+      JWT_SECRET: 'a1e8b979266cffb13940b9f8c326a55d083c42cf376b09aa6724202864832449'
+      API_BASE: http://127.0.0.1:8000
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: despegar
+          POSTGRES_USER: despegar
+          POSTGRES_PASSWORD: ci
+        ports:
+          - '5432:5432'
+        options: >-
+          --health-cmd "pg_isready -U despegar -d despegar"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar PHP 8.2 (pdo_pgsql)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_pgsql
+          coverage: none
+          tools: none
+
+      - name: Instalar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias (si el proyecto las tiene)
+        run: |
+          if [ -f package.json ]; then
+            npm ci
+          else
+            echo "Sin package.json en la raiz: las suites usan node:test, sin dependencias."
+          fi
+
+      - name: Lint de PHP (php -l en todo backend/)
+        run: |
+          find backend -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Aplicar schema y seeds
+        env:
+          PGPASSWORD: ci
+        run: |
+          psql --version
+          psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f db/schema.sql
+          psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f db/seeds.sql
+
+      - name: Crear backend/.env de prueba
+        run: |
+          cat > backend/.env <<EOF
+          DB_HOST=$DB_HOST
+          DB_PORT=$DB_PORT
+          DB_NAME=$DB_NAME
+          DB_USER=$DB_USER
+          DB_PASS=$DB_PASS
+          JWT_SECRET=$JWT_SECRET
+          BCRYPT_COST=10
+          JWT_TTL_HOURS=8
+          REFRESH_TTL_DAYS=30
+          APP_ENV=development
+          CORS_ORIGIN=*
+          EOF
+          cat backend/.env
+
+      - name: Levantar la API en background
+        run: |
+          nohup php -S 127.0.0.1:8000 -t backend/public > api.log 2>&1 &
+          echo $! > api.pid
+          sleep 1
+
+      - name: Esperar el health check
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "$API_BASE/api/health" > /dev/null; then
+              echo "API lista en $API_BASE"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::La API no respondio el health check"
+          cat api.log || true
+          exit 1
+
+      - name: Tests de la API (node:test)
+        run: node --test tests/api.test.mjs
+
+      - name: Tests del cliente movil (node:test)
+        run: node --test tests/api_client_refresh.test.mjs
+
+      - name: Subir los logs de la API (si algo fallo)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-log
+          path: |
+            api.log
+            backend/var/ratelimit
+          if-no-files-found: warn
+          retention-days: 7
