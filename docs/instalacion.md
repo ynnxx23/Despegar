@@ -201,15 +201,20 @@ railway variable list --service Postgres --kv
 
 Qué hace el script:
 
-- Si la base **ya tiene tablas** → aplica solo `seeds.sql` + las migraciones `02/03/04`
-  (idempotente). Es el caso normal.
+- Si la base **ya tiene tablas** → aplica solo `seeds.sql` + las migraciones `02/03/04/05/06`
+  (idempotentes). Es el caso normal.
+  - `migrate_05_admin_auditoria.sql`: rol `admin`, tabla `usuarios_auditoria`, índices y trigger.
+  - `migrate_06_seed_demo_grande.sql`: los datos de demostración (12 usuarios, 10 reservas,
+    14 incidentes y 7 respuestas). Ver `datos.md`.
 - Si la base **está vacía** → aplica `schema.sql` + `seeds.sql`.
 - Con `-Force` → re-aplica `schema.sql`, que **DROPea las tablas**: borra los datos.
 
 > `db/schema.sql` es destructivo. Nunca lo apliques sobre la base de la demo sin `-Force`.
 
-Datos que deja la base: `sembrar_demo()` crea los usuarios `ana@test.com / Viaje1234`
-(viajera) y `agente@despegar.com / Agente123` (agente).
+Datos que deja la base: `sembrar_demo()` crea los administradores `admin@despegar.com / Admin1234`
+y `admin2@despegar.com / Admin5678`, los agentes `agente@despegar.com / Agente123` (y `maria@`,
+`carlos@`, `lucia@`) y los viajeros `ana@test.com / Viaje1234` (y `bruno@`, `sofia@`, `diego@`,
+`valeria@`, `tomas@`). La tabla completa está en `datos.md`.
 
 ---
 
@@ -368,7 +373,8 @@ tiene que permitir los puertos `8000`, `8081` y `8082` en red privada.
 - [ ] `powershell -ExecutionPolicy Bypass -File deploy\railway-resume.ps1` → API 200 en `/api/health`
 - [ ] (solo si la base está vacía o cambió el schema) `deploy\init-db.ps1` por túnel SSH
 - [ ] Doble clic en `start-viajero.cmd` y `start-agente.cmd` → escanear el QR en el celu
-- [ ] Login de prueba `ana@test.com / Viaje1234`
+- [ ] Login de prueba `ana@test.com / Viaje1234` (viajero), `agente@despegar.com / Agente123`
+      (agente) y `admin@despegar.com / Admin1234` (administrador). Todas en `datos.md`.
 - [ ] Al terminar la demo: `powershell -ExecutionPolicy Bypass -File deploy\railway-pause.ps1`
 
 ---
