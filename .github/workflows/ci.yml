@@ -72,6 +72,10 @@ jobs:
         env:
           PGPASSWORD: ci
         run: |
+          if ! command -v psql > /dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends postgresql-client
+          fi
           psql --version
           psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f db/schema.sql
           psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f db/seeds.sql

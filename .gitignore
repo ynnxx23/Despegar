@@ -11,6 +11,8 @@ node_modules/
 .expo/
 dist/
 build/
+android/          # generado por "expo prebuild" (build local)
+ios/              # generado por "expo prebuild" (build local)
 *.log
 .vscode/
 
