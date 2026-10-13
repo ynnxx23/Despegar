@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Despegar Incidentes API",
-    "version": "1.4.0"
+    "version": "1.4.1"
   },
   "servers": [
     {
@@ -181,6 +181,11 @@
     "/api/admin/incidentes/{id}/auditoria": {
       "get": {
         "summary": "Verificar hash encadenado"
+      }
+    },
+    "/api/admin/incidentes/{id}/auditoria/resellar": {
+      "post": {
+        "summary": "Resella hash con tolerancia legacy (sello prev null)"
       }
     },
     "/api/admin/incidentes/{id}/ia": {

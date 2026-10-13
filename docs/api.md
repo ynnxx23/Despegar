@@ -13,21 +13,45 @@ Estructura:
 
 ```
 backend/
-  public/index.php          # router + CORS + init (única entrada)
+  public/index.php          # router + CORS + init (única entrada, ~50 rutas)
   .env / .env.example       # secretos (.env gitignored, jamás commitear)
+  db_migrate.php            # runner migraciones (schema_migrations, idempotente)
   src/Config.php            # lee .env sin librerías
   src/Database.php          # singleton PDO (ERRMODE_EXCEPTION, EMULATE_PREPARES=false)
-  src/Utils/JwtHS256.php    # JWT HS256 manual (hash_hmac + hash_equals)
-  src/Utils/Response.php    # JSON uniforme {data} / {error:{code,message}}
-  src/Middleware/Auth.php   # Bearer + requireRole (401/403)
-  src/Models/               # Usuario, Reserva, Incidente, Respuesta (solo SQL preparado)
-  src/Controllers/          # Auth, Itinerario, Incidentes (viajero), Admin (agente)
+  src/Utils/JwtHS256.php    # JWT HS256 manual (hash_hmac + hash_equals, jti+iss)
+  src/Utils/Response.php    # JSON uniforme {data} / {error:{code,code_str,request_id}}
+  src/Utils/Logger.php      # log JSON estructurado con request-id
+  src/Utils/RateLimit.php   # rate-limit login 10/min + escritura 120/min
+  src/Utils/IaHeuristica.php # score urgencia + copiloto + resumen + traducción
+  src/Utils/AuditoriaHash.php # hash encadenado + resellado legacy
+  src/Utils/Ocr.php         # tesseract real + fallback heurístico
+  src/Utils/Stt.php         # Whisper real + stub honesto
+  src/Utils/Push.php        # multicanal log/email/FCM/WhatsApp
+  src/Middleware/Auth.php   # Bearer + requireRole (401/403, bloquea borradas/inactivas)
+  src/Models/               # Usuario, Reserva, Incidente, Respuesta, Notificacion
+  src/Controllers/          # Auth, Itinerario, Incidentes, Admin, Adjuntos,
+                            # Notificaciones, Ia, Chatbot
 db/
   schema.sql                # tablas + trigger trg_incidentes_touch + funciones
                             # touch_actualizado_at(), crear_respuesta(), resumen_cola()
                             # + procedimiento sembrar_demo()
   seeds.sql                 # CALL sembrar_demo() (idempotente)
+  migrate_02..07            # triaje, gestión, completa, fase4, sesiones/GDPR, equipo/reset
 ```
+
+## 1b. Arquitectura (diagrama texto)
+
+```mermaid
+flowchart LR
+  V[App Viajero<br/>rol viajero] -->|Bearer JWT| API[API PHP<br/>index.php + Auth]
+  A[App Agente<br/>rol agente] -->|Bearer JWT| API
+  API -->|PDO prepared| PG[(PostgreSQL<br/>schema + 02..07)]
+  API -->|tesseract / Whisper<br/>FCM / WhatsApp| EXT[Proveedores<br/>opcionales]
+  V <--SSE /poll 30s--> API
+  A <--SSE /poll 30s--> API
+```
+
+Detalle visual en `flujo-apps.drawio` (abrir en app.diagrams.net).
 
 ## 2. Levantar en local
 
@@ -44,7 +68,7 @@ copy backend\.env.example backend\.env   # ajustar JWT_SECRET (>=32 bytes)
 # 4. Servir (0.0.0.0 para alcance LAN desde el celular)
 php -S 0.0.0.0:8000 -t backend/public backend/public/index.php
 # 5. Verificar
-# GET http://localhost:8000/api/health -> {ok,service,fase}
+# GET http://localhost:8000/api/health -> {ok,service,fase,db} (fase actual: 'F3-dominio' hardcodeada, solo etiqueta)
 ```
 
 Opción Docker (opcional): `docker compose up --build` → API `:8000`, PostgreSQL `:5432`.
@@ -57,7 +81,7 @@ Variables `.env` (`backend/.env.example`): `DB_HOST/PORT/NAME/USER/PASS`,
 `SMTP_HOST/PORT/USER/PASS/FROM`, `FCM_CREDENTIALS` + `FCM_PROJECT`,
 `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_DESTINO_TEST` (solo test/manual).
 
-## 8. Canales push y proveedores
+## 3. Proveedores y canales push
 
 `NOTIF_CHANNELS=log` por defecto (outbox en log). `log,email` envía email vía
 `mail()` o SMTP (`SMTP_HOST/PORT/USER/PASS/FROM`). `fcm`/`whatsapp` requieren
@@ -65,20 +89,21 @@ Variables `.env` (`backend/.env.example`): `DB_HOST/PORT/NAME/USER/PASS`,
 OCR usa `tesseract` si instalado (`OCR_ENABLED=1`, `TESSERACT_BIN`); si no, heurístico.
 STT usa Whisper si `STT_PROVIDER=whisper` + `OPENAI_API_KEY` (`WHISPER_MODEL`); si no, stub honesto.
 
-## 3. Auth
+## 4. Auth
 
 - Registro público solo rol `viajero`. Cuentas `agente` las crea el equipo.
 - Login responde 401 genérico (no revela si el email existe).
-- JWT HS256 claims `{sub,rol,iat,exp}`, expira 8h. Header: `Authorization: Bearer <jwt>`.
+- JWT HS256 claims `{sub,rol,iat,exp,iss,jti}`, expira 8h (`JWT_TTL_HOURS` 1-24). Header: `Authorization: Bearer <jwt>`.
+- Refresh opaco 30d con rotación (revoca el usado) + revocación una/todas (`POST /logout`).
 - `Auth::requireRole([...])`: 401 sin/inválido/expirado, 403 rol insuficiente o recurso ajeno.
-- Contraseñas: `password_hash(BCRYPT)` + `password_verify`, nunca se devuelven (`toSafe`).
+- Contraseñas: `password_hash(BCRYPT cost 10-12)` + `password_verify`, nunca se devuelven (`toSafe` con `email_verificado`).
 
-## 4. Endpoints (base `/api`, JSON)
+## 5. Endpoints (base `/api`, JSON)
 
 | Método | Ruta | Rol | Body / params | Éxito | Errores |
 |---|---|---|---|---|---|
 | GET | `/health` | — | — | 200 `{ok,service,fase}` | — |
-| GET | `/openapi.json` | — | Contrato OpenAPI 1.4.0 | 200 | 404 |
+| GET | `/openapi.json` | — | Contrato OpenAPI 1.4.1 | 200 | 404 |
 | POST | `/register` | público | `{nombre 2-100, email, password 8-72}` | 201 `{user,token,refresh_token}` (rol `viajero`) | 400, 409 |
 | POST | `/login` | público | `{email,password}` | 200 `{user,token,refresh_token}` | 400, 401 |
 | GET | `/me` | auth | | 200 `{user}` (`email_verificado`) | 401 |
@@ -116,6 +141,7 @@ STT usa Whisper si `STT_PROVIDER=whisper` + `OPENAI_API_KEY` (`WHISPER_MODEL`); 
 | GET | `/admin/sla/riesgo` | agente | Vencen <6h + `sugerencia_reasignar` (SLA predictivo) | 200 | 401, 403 |
 | POST | `/admin/sla/revisar` | agente | Notifica vencidos (disparo manual) | 200 `{revisados,avisados}` | 401, 403 |
 | GET | `/admin/incidentes/:id/auditoria` | agente | Verifica hash encadenado `{ok,incidente_id}` | 200 | 401, 403, 404 |
+| POST | `/admin/incidentes/:id/auditoria/resellar` | agente | Resella eventos legacy (prev null + tolerancia) | 200 | 401, 403, 404 |
 | GET | `/admin/incidentes/:id/ia` | agente | Triage IA `{sugerida,motivo,ia_score,ia_nivel,ia_explica}` | 200 | 401, 403, 404 |
 | POST | `/admin/incidentes/:id/copiloto` | agente | `{tono}` → `{texto,tono,fuente,contexto?}` (no envía) | 200 | 401, 403, 404 |
 | GET | `/incidentes/:id/resumen` | dueño o agente | `?lang=es|en|pt` resumen extractivo + traducción básica | 200 | 401, 403, 404 |
@@ -130,7 +156,7 @@ STT usa Whisper si `STT_PROVIDER=whisper` + `OPENAI_API_KEY` (`WHISPER_MODEL`); 
 Códigos: 400 validación, 401 sin token/inválido/expirado, 403 rol o recurso ajeno,
 404 inexistente, 409 email duplicado o caso asignado a otro (claim), 500 genérico (detalle solo en `error_log`).
 
-## 4b. Flujo triage/SLA/claim
+## 6. Flujo triage/SLA/claim
 
 1. Viajero crea → `prioridad` NULL (sin triar) + `prioridad_sugerida`/`prioridad_motivo` + evento `creado`.
 2. Agente filtra cola con `orden=urgencia` o abre `mi-cola`; `resumen` muestra `sin_triar/vencidos/mios`.
@@ -139,7 +165,7 @@ Códigos: 400 validación, 401 sin token/inválido/expirado, 403 rol o recurso a
 5. Agente responde / cambia estado → eventos `responder`/`estado`/`resuelto`/`reabierto`; el viajero solo ve historial público.
 6. Cierre exige prioridad: `PUT estado=Resuelto` sin prioridad (real o en body) → 400.
 
-## 5. Base de datos (resumen operativo)
+## 7. Base de datos (resumen operativo)
 
 Tablas: `usuarios`, `reservas` (FK `user_id` CASCADE), `incidentes`
 (FK `user_id` CASCADE, `reserva_id` SET NULL, `asignado_a` SET NULL, `triado_por` sin FK dura),
@@ -156,7 +182,7 @@ Rutinas con uso real: trigger `trg_incidentes_touch` (`actualizado_at` automáti
 Credenciales demo (solo desarrollo): `agente@despegar.com` / `Agente123`,
 `maria@despegar.com` / `Agente456`, `ana@test.com` / `Viaje1234`, `bruno@test.com` / `Viaje5678`.
 
-## 6. Tests
+## 8. Tests
 
 Requieren API en `:8000`, BD prístina (reaplicar schema+seeds antes):
 
@@ -167,14 +193,14 @@ powershell -ExecutionPolicy Bypass -File tests/api_f7_integracion.ps1 # expirado
 powershell -ExecutionPolicy Bypass -File tests/api_f8_gestion.ps1     # gestion: sugerencia/SLA/claim/derivar/seguir/historial
 powershell -ExecutionPolicy Bypass -File tests/api_f9_fases.ps1       # idempotencia/réplica/internas/transiciones/bulk/merge/métricas/openapi
 powershell -ExecutionPolicy Bypass -File tests/api_f10_fase4.ps1      # IA/copiloto/resumen/notifs/chatbot/STT/riesgo/CSV/auditoría/adjunto/OCR
-powershell -ExecutionPolicy Bypass -File tests/api_f11_contrato.ps1  # formas + OpenAPI 1.4.0
+powershell -ExecutionPolicy Bypass -File tests/api_f11_contrato.ps1  # formas + OpenAPI 1.4.1
 powershell -ExecutionPolicy Bypass -File tests/api_f12_sesiones_gdpr.ps1 # refresh/logout/GDPR/email
 powershell -ExecutionPolicy Bypass -File tests/api_f13_equipo_reset.ps1  # reset/equipo
 ```
 
 Suites F2/F3/F7/F8/F9/F10/F11/F12/F13 en verde. `tests/mint_expired.php` genera JWT expirado para F7.
 
-## 7. Seguridad y límites
+## 9. Seguridad y límites
 
 - `PDO::prepare` en todo, `CHECK`s como defensa en profundidad, errores sin traces/SQL.
 - CORS `*` solo-dev. Secretos solo en `.env` (verificado fuera de git).

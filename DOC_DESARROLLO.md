@@ -112,7 +112,7 @@ Handler global convierte excepciones en 500 JSON sin traces. `Auth::bearer()` ac
 ## 5. API — referencia
 
 Base `/api`. Auth: `Authorization: Bearer <jwt>` (salvo register/login/health/refresh/password).
-Documentación viva en `docs/api.md` + `docs/openapi.json` (v1.4.0).
+Documentación viva en `docs/api.md` + `docs/openapi.json` (v1.4.1). Diagrama visual: `docs/flujo-apps.drawio` + diagrama texto en `docs/api.md` §1b.
 
 | Método | Ruta | Rol | Body / params | Éxito | Errores |
 |---|---|---|---|---|---|
@@ -141,7 +141,7 @@ Documentación viva en `docs/api.md` + `docs/openapi.json` (v1.4.0).
 | POST | `/admin/incidentes/:id/claim|release|derivar|seguir` | agente | claim/release/derivar transaccionales | 200 | 400, 401, 403, 404, 409 |
 | DELETE | `/admin/incidentes/:id/seguir` | agente | dejar de seguir | 200 | 401, 403, 404 |
 | GET | `/admin/incidentes/:id/historial` | agente | paginado, con hash | 200 | 401, 403, 404 |
-| GET | `/admin/incidentes/:id/ia`, `/admin/incidentes/:id/auditoria` | agente | score+explica / verifica hash | 200 | 401, 403, 404 |
+| GET | `/admin/incidentes/:id/ia`, `/admin/incidentes/:id/auditoria` | agente | score+explica / verifica hash (+`POST .../auditoria/resellar` legacy) | 200 | 401, 403, 404 |
 | POST | `/admin/incidentes/:id/copiloto`, `.../merge` | agente | `{tono}` / `{duplicado_de}` | 200 | 400, 401, 403, 404 |
 | POST | `/admin/incidentes/bulk` | agente | `{ids[1-50],accion,...}` | 200 `{ok,errores,total}` | 400, 401, 403 |
 | GET/POST | `/admin/agentes`, `/admin/agentes/:id/estado` | agente | alta equipo / `{activo}` | 200/201 | 400, 401, 403, 404, 409 |
@@ -211,7 +211,7 @@ Automático (requieren API en `:8000` con BD migrada 02-07): `api_f2_auth` (10),
 `api_f3_dominio` (20), `api_f7_integracion` (expirado→401 + loop), `api_f8_gestion`
 (sugerencia/SLA/claim/derivar/seguir/historial), `api_f9_fases` (idempotencia/réplica/
 internas/transiciones/bulk/merge/métricas/openapi), `api_f10_fase4` (IA/copiloto/resumen/
-notifs/chatbot/OCR/adjuntos), `api_f11_contrato` (formas + OpenAPI 1.4.0),
+notifs/chatbot/OCR/adjuntos), `api_f11_contrato` (formas + OpenAPI 1.4.1),
 `api_f12_sesiones_gdpr` (refresh/logout/GDPR/email), `api_f13_equipo_reset` (reset/equipo),
 con `tests/mint_expired.php`. CI (`.github/workflows/api.yml`): lint PHP + migraciones + health.
 E2E móvil: `tests/e2e/*.yaml` (Maestro). Manual: checklist Expo Go en `README.md`.

@@ -1,5 +1,10 @@
 # Plan sistema gestión errores completo + identidad + orden
 
+> NOTA (post-`copia`): documento histórico. Plan original ejecutado al 100 %.
+> Estado actual: contrato OpenAPI v1.4.1 (incluye `POST /admin/incidentes/:id/auditoria/resellar`),
+> diagrama `flujo-apps.drawio` reparado (XML válido) + diagrama texto en `docs/api.md` §1b.
+> Fuente vigente: `DOC_PROYECTO.md`, `DOC_DESARROLLO.md`, `docs/api.md`.
+
 > Post `git pull b79c007`. Ya existe: triage/SLA/claim/derivar/seguir/historial/mi-cola, 7 tipos, tests F8.
 
 ## 1. Identidad visual Despegar (investigación)

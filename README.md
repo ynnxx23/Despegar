@@ -1,7 +1,7 @@
 # Despegar — Grupo 8 (Gestión de Incidentes Críticos)
 Ecosistema con **2 apps móviles** (viajero + agente) sobre una API PHP + PostgreSQL.
 Documentación: `DOC_PROYECTO.md` (general), `DOC_DESARROLLO.md` (técnica),
-`docs/api.md` + `docs/openapi.json` v1.4.0 (contrato), `docs/app-viajero.md`, `docs/app-agente.md`.
+`docs/api.md` + `docs/openapi.json` v1.4.1 (contrato), `docs/app-viajero.md`, `docs/app-agente.md`.
 
 ## Estructura
 - `backend/` PHP 8.2 POO + PDO pgsql (sin framework). Entrada: `backend/public/index.php` (~40 rutas). Runner: `backend/db_migrate.php`.
@@ -41,7 +41,7 @@ Opción B con Docker (opcional): `docker compose up --build` → API `:8000`, Po
 | GET/PUT | `/admin/incidentes/:id` | agente | Triaje (transición válida, Resuelto exige prioridad) |
 | GET/POST | `/admin/incidentes/:id/respuestas` | agente | Hilo / responder (pública o interna) |
 | POST/DELETE | `/admin/incidentes/:id/claim\|release\|derivar\|seguir` | agente | Gestión transaccional de casos |
-| GET | `/admin/incidentes/:id/historial\|ia\|auditoria` | agente | Eventos+hash / score IA / verificación |
+| GET | `/admin/incidentes/:id/historial\|ia\|auditoria` | agente | Eventos+hash / score IA / verificación + `POST .../auditoria/resellar` (legacy) |
 | POST | `/admin/incidentes/:id/copiloto`, `.../merge`, `/admin/incidentes/bulk` | agente | Copiloto / duplicado / masivo |
 | GET/POST/PUT | `/admin/agentes`, `/admin/agentes/:id/estado` | agente | Equipo: listar, alta, activar/desactivar |
 | GET/POST | `/admin/metricas(.csv)`, `/admin/sla/riesgo\|revisar` | agente | Dashboard y SLA predictivo |

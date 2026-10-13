@@ -76,7 +76,7 @@ Credencial demo: `ana@test.com` / `Viaje1234` (otra: `bruno@test.com` / `Viaje56
 | Viajes | `ItinerarioScreen.js` | `GET /itinerario`, pull-refresh, acceso directo a Reportar |
 | Reportar | `NuevoIncidenteScreen.js` | `POST /incidentes` + `idempotencia_key`; sin red → cola offline |
 | Incidentes | `MisIncidentesScreen.js` | `GET /incidentes/mios?estado=&q=`, filtros, badges |
-| Detalle | `DetalleIncidenteScreen` | detalle + historial público + hilo; réplica (reabre), adjuntos + OCR, reabrir |
+| Detalle | Detalle embebido en MisIncidentes | detalle + historial público + hilo; réplica (reabre), adjuntos + OCR, reabrir |
 | Avisos | `NotificacionesScreen.js` | `GET /notificaciones`, leer una/todas |
 | Ayuda | `AyudaScreen.js` | FAQ + `POST /chatbot/borrador` (tipo/título/faltantes) |
 | Perfil | `PerfilScreen.js` | verificación email, cerrar sesión/todas, `DELETE /me` (GDPR) |

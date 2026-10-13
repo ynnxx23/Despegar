@@ -29,7 +29,7 @@ apps/agente/
 apps/shared/                # ver app-viajero.md (theme EVA, api+refresh, etc.)
 ```
 
-Campana 🔔 en header alterna Cola/Avisos con conteo de no leídas.
+Campana en header alterna Cola/Avisos con conteo de no leídas.
 
 ## 3. Puesta en marcha
 
