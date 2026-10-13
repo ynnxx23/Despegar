@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Despegar Ayuda al Viajero",
+    "slug": "despegar-viajero",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "primaryColor": "#4300D2",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.despegar.viajero"
+    }
+  }
+}

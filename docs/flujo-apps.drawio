@@ -1,0 +1,191 @@
+<mxfile host="app.diagrams.net" version="24.0.0">
+  <diagram name="Flujo-2-Apps-Despegar" id="despegar-flujo-2apps">
+    <mxGraphModel dx="1420" dy="980" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1440" pageHeight="960" background="#ffffff">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <!-- ===== Titulo ===== -->
+        <mxCell id="title" value="Despegar Grupo 8 — Flujo detallado 2 Apps + API PHP + PostgreSQL" style="text;html=1;fontSize=20;fontStyle=1;fontColor=#1E1B2E;align=center;" vertex="1" parent="1">
+          <mxGeometry x="240" y="10" width="960" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="JWT + refresh rotado 30d. Viajero y Agente comparten API y BD. Loop: viajero reporta+responde -> agente gestiona+IA -> viajero lee.   Archivo: docs/flujo-apps.drawio (abrir en app.diagrams.net)" style="text;html=1;fontSize=11;fontColor=#6B7280;align=center;" vertex="1" parent="1">
+          <mxGeometry x="240" y="38" width="960" height="20" as="geometry" />
+        </mxCell>
+        <!-- ===== Cabeceras carriles ===== -->
+        <mxCell id="h-viaj" value="APP 1 · Portal Viajero (rol viajero, Expo RN)" style="rounded=1;html=1;fontStyle=1;fontSize=12;fillColor=#EBE5F5;strokeColor=#4300D2;fontColor=#270570;" vertex="1" parent="1">
+          <mxGeometry x="20" y="65" width="260" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="h-shared" value="SHARED (apps/shared) + SecureStore" style="rounded=1;html=1;fontStyle=1;fontSize=12;fillColor=#F3F4F6;strokeColor=#6B7280;" vertex="1" parent="1">
+          <mxGeometry x="300" y="65" width="240" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="h-back" value="BACKEND PHP 8.2 POO + PDO (backend/public/index.php)" style="rounded=1;html=1;fontStyle=1;fontSize=12;fillColor=#DBEAFE;strokeColor=#2563EB;" vertex="1" parent="1">
+          <mxGeometry x="560" y="65" width="280" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="h-pg" value="PostgreSQL (schema + seeds + migrate_02-07)" style="rounded=1;html=1;fontStyle=1;fontSize=12;fillColor=#D1FAE5;strokeColor=#047857;" vertex="1" parent="1">
+          <mxGeometry x="860" y="65" width="270" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="h-ag" value="APP 2 · Centro Resolución (rol agente, Expo RN)" style="rounded=1;html=1;fontStyle=1;fontSize=12;fillColor=#FEF3C7;strokeColor=#B45309;fontColor=#92400E;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="65" width="270" height="30" as="geometry" />
+        </mxCell>
+        <!-- ===== Actores ===== -->
+        <mxCell id="actor-v" value="Viajero" style="ellipse;html=1;fillColor=#EBE5F5;strokeColor=#4300D2;fontColor=#270570;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="105" width="100" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="actor-a" value="Agente" style="ellipse;html=1;fillColor=#FEF3C7;strokeColor=#B45309;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1235" y="105" width="100" height="50" as="geometry" />
+        </mxCell>
+        <!-- ===== VIAJERO screens ===== -->
+        <mxCell id="v-login" value="LoginScreen + RegisterScreen&#xa;POST /register (viajero)&#xa;POST /login → {user, token, refresh} + recupero&#xa;validación inline, 409/401" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#EBE5F5;strokeColor=#4300D2;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="170" width="260" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="v-app" value="App.js viajero (tabs sin lib)&#xa;restore: SecureStore → api.me()&#xa;401 → refresh auto en 401 + onUnauthorized → logout&#xa; Reportar   Incidentes tabs: Viajes   Reportar   Incidentes   Avisos   Ayuda   Perfil| Reportar | Incidentes" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#EBE5F5;strokeColor=#4300D2;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="275" width="260" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="v-iti" value="ItinerarioScreen&#xa;GET /itinerario&#xa;pull-refresh · vacío · reintentar&#xa;cards vuelo/hotel" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#4300D2;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="385" width="260" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="v-nuevo" value="NuevoIncidenteScreen&#xa;GET /itinerario (reserva opcional)&#xa;tipo + título 5-120 + desc 10-2000&#xa;offline queue + idempotencia, Alert Confirmar → POST /incidentes → #id" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#4300D2;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="485" width="260" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="v-mios" value="MisIncidentesScreen&#xa;GET /incidentes/mios?estado=&#xa;filtros + b�squeda + badges (7 estados)&#xa;badges estado + prioridad" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#4300D2;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="605" width="260" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="v-det" value="DetalleIncidenteScreen&#xa;GET /incidentes/:id&#xa;GET /incidentes/:id/respuestas&#xa;hilo replica + adjuntos/OCR + reabrir (dueño)" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#4300D2;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="715" width="260" height="95" as="geometry" />
+        </mxCell>
+        <!-- ===== SHARED ===== -->
+        <mxCell id="s-auth" value="auth.js (SecureStore)&#xa;saveSession(token,user,refresh) + offline_queue&#xa;token fuera de plano&#xa;adaptador memoria testeable" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#F3F4F6;strokeColor=#6B7280;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="300" y="170" width="240" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="s-api" value="api.js (fetch, sin Axios)&#xa;BASE_URL → http://IP:8000/api&#xa;Bearer auto + 401 → refresh auto en 401 + onUnauthorized&#xa;get/post/put/del + refresh/logout/GDPR" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#F3F4F6;strokeColor=#374151;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="300" y="275" width="240" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="s-ui" value="theme.js + components.js + format.js&#xa;EVA #4300D2, pill 24, cards 8&#xa;Button/Input/Badge/Logo/Chip/Avisos/Reset&#xa;etiquetas es-AR, fechas" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#F9FAFB;strokeColor=#9CA3AF;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="300" y="395" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="s-401" value="¿401 inválido / expirado?&#xa;→ logout + volver a Login" style="rhombus;html=1;whiteSpace=wrap;fillColor=#FEF2F2;strokeColor=#DC2626;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="330" y="520" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="s-403" value="¿403 rol insuficiente /&#xa;recurso ajeno?&#xa;viajero ↯ /admin/*" style="rhombus;html=1;whiteSpace=wrap;fillColor=#FEF2F2;strokeColor=#DC2626;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="330" y="630" width="180" height="90" as="geometry" />
+        </mxCell>
+        <!-- ===== BACKEND ===== -->
+        <mxCell id="b-router" value="index.php front-controller&#xa;CORS allowlist, OPTIONS 204 → bodyJson()&#xa;Database::pdo() → router exacto / regex&#xa;GET /health con DB + /openapi.json" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#DBEAFE;strokeColor=#2563EB;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="560" y="170" width="280" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="b-auth" value="Middleware Auth::requireRole()&#xa;Bearer de 3 fuentes (Apache/CLI)&#xa;JwtHS256: HS256 + hash_equals + exp + jti&#xa;401/403 + bloquea borradas/inactivas" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#BFDBFE;strokeColor=#1D4ED8;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="560" y="285" width="280" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="b-cauth" value="AuthController&#xa;register/login ? par token+refresh (rotaci�n)&#xa;login: 401 genérico, JWT 8h + refresh {sub,rol,jti}&#xa;me + email verify + equipo agentes" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#2563EB;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="560" y="400" width="280" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="b-cviaj" value="Itinerario + Incidentes (viajero)&#xa;mios paginado+q / crear idempotente&#xa;r�plica + reabrir + adjuntos/OCR + resumen IA&#xa;reserva_id propia � notas internas ocultas" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#2563EB;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="560" y="515" width="280" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="b-cadm" value="AdminController (solo agente)&#xa;cola urgencia + filtros + pag · resumen&#xa;claim/derivar transaccional + bulk/merge&#xa;responder → crear_respuesta() atómica (no reabre finales)" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#1D4ED8;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="560" y="630" width="280" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="b-model" value="Models + PDO pgsql (prepared, sin emulación)&#xa;Usuario / Reserva / Incidente.norm() / Respuesta&#xa;Response::{json,error} + error_log&#xa;Config .env (DB_*, JWT_SECRET)" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#EFF6FF;strokeColor=#2563EB;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="560" y="750" width="280" height="100" as="geometry" />
+        </mxCell>
+        <!-- ===== PG ===== -->
+        <mxCell id="d-tab" value="Tablas (VARCHAR + CHECK, TIMESTAMPTZ)&#xa;usuarios ─1:N→ reservas, incidentes&#xa;reservas ─1:N→ incidentes (SET NULL)&#xa;incidentes ─1:N→ respuestas/notifs/adjuntos/eventos (CASCADE)" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#E8F0FE;strokeColor=#336791;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="860" y="170" width="270" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="d-idx" value="Índices&#xa;idx_reservas_user, idx_incidentes_user&#xa;idx_incidentes_cola(estado,prioridad,creado)&#xa;idx_respuestas_incidente + SLA/asignado/tipo/notifs/refresh" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#E8F0FE;strokeColor=#336791;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="860" y="290" width="270" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="d-crear" value="crear_respuesta(p_inc,p_aut,msg)→INT&#xa;INSERT respuesta + UPDATE EnGestion&#xa;en UNA transacción (plpgsql, no reabre finales)&#xa;valida 2-2000, P0002→404" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#D1FAE5;strokeColor=#047857;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="860" y="395" width="270" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="d-res" value="resumen_cola() TABLE(estado,prior,total)&#xa;SQL STABLE, GROUP BY 1,2&#xa;→ GET /admin/incidentes/resumen&#xa;panel conteos del agente" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#D1FAE5;strokeColor=#047857;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="860" y="510" width="270" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="d-trg" value="touch_actualizado_at() + trigger&#xa;BEFORE UPDATE incidentes&#xa;mantiene actualizado_at auto&#xa;(sin gestión en PHP)" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#D1FAE5;strokeColor=#047857;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="860" y="625" width="270" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="d-seed" value="sembrar_demo() PROCEDURE + seeds.sql&#xa;CALL idempotente: 2 agentes + 2 viajeros&#xa;+ 3 reservas + 1 incidente demo&#xa;ana/Viaje1234 · agente/Agente123" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#FEFCE8;strokeColor=#A16207;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="860" y="735" width="270" height="100" as="geometry" />
+        </mxCell>
+        <!-- ===== AGENTE screens ===== -->
+        <mxCell id="a-login" value="LoginScreen corporativo&#xa;POST /login → exige rol=agente&#xa;sin registro público&#xa;rechaza viajero" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#FEF3C7;strokeColor=#B45309;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="170" width="270" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="a-cola" value="ColaScreen (orden urgencia SLA)&#xa;GET /admin/incidentes? + /resumen&#xa;buscador + filtros tipo/estado/prio + panel&#xa;panel MTTR/riesgo + paginacion<mxGeometry x="1150" y="275" width="270" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="a-det" value="DetalleGestionScreen&#xa;GET /admin/:id + /respuestas&#xa;PUT {prioridad?, estado?} parcial&#xa;claim/derivar/seguir + IA + copiloto<mxGeometry x="1150" y="405" width="270" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="a-resp" value="Responder + Cerrar&#xa;POST /admin/:id/respuestas {msg 2-2000}&#xa;→ pasa a EnGestion o interna (atómico)&#xa;Resuelto con Alert confirmación" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#ffffff;strokeColor=#B45309;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="530" width="270" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="loop" value="LOOP END-TO-END&#xa;viajero crea #N → aparece 1° en cola urgencia&#xa;agente responde / prioriza / cierra&#xa;viajero ve hilo + Resuelto" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#EBE5F5;strokeColor=#4300D2;fontStyle=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="655" width="270" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="sec" value="Seguridad transversal: bcrypt + JWT 8h + SecureStore + PDO prepared + CHECKs + 401 genérico + sin traces/SQL + .env gitignored + CORS allowlist + GDPR" style="rounded=1;html=1;whiteSpace=wrap;fillColor=#FEF2F2;strokeColor=#DC2626;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="300" y="750" width="540" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="tests" value="Tests F2/F3/F7/F8/F9/F10/F11/F12/F13 + e2e Maestro + CI<mxGeometry x="300" y="815" width="540" height="40" as="geometry" />
+        </mxCell>
+        <!-- ===== EDGES viajero ===== -->
+        <mxCell id="e0" style="endArrow=block;html=1;strokeColor=#4300D2;" edge="1" parent="1" source="actor-v" target="v-login">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="endArrow=block;html=1;strokeColor=#4300D2;" edge="1" parent="1" source="v-login" target="s-auth">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" style="endArrow=block;html=1;strokeColor=#4300D2;" edge="1" parent="1" source="v-app" target="s-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="Bearer JWT" style="endArrow=block;html=1;strokeColor=#374151;fontSize=10;" edge="1" parent="1" source="s-api" target="b-router">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" style="endArrow=block;html=1;strokeColor=#2563EB;" edge="1" parent="1" source="b-router" target="b-auth">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" style="endArrow=block;html=1;strokeColor=#2563EB;" edge="1" parent="1" source="b-cviaj" target="b-model">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="PDO pgsql prepared" style="endArrow=block;html=1;strokeColor=#047857;fontSize=10;" edge="1" parent="1" source="b-model" target="d-tab">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" style="endArrow=block;html=1;strokeColor=#4300D2;" edge="1" parent="1" source="v-iti" target="s-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" style="endArrow=block;html=1;strokeColor=#4300D2;" edge="1" parent="1" source="v-nuevo" target="s-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" style="endArrow=block;html=1;strokeColor=#4300D2;" edge="1" parent="1" source="v-mios" target="s-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" style="endArrow=block;html=1;strokeColor=#4300D2;" edge="1" parent="1" source="v-det" target="s-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- ===== EDGES agente ===== -->
+        <mxCell id="e20" style="endArrow=block;html=1;strokeColor=#B45309;" edge="1" parent="1" source="actor-a" target="a-login">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e21" style="endArrow=block;html=1;strokeColor=#B45309;" edge="1" parent="1" source="a-cola" target="s-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e22" style="endArrow=block;html=1;strokeColor=#B45309;" edge="1" parent="1" source="a-det" target="s-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e23" style="endArrow=block;html=1;strokeColor=#B45309;" edge="1" parent="1" source="a-resp" target="s-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e24" value="solo agente" style="endArrow=block;html=1;strokeColor=#1D4ED8;fontSize=10;" edge="1" parent="1" source="b-auth" target="b-cadm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e25" value="SELECT crear_respuesta" style="endArrow=block;html=1;strokeColor=#047857;fontSize=10;" edge="1" parent="1" source="b-cadm" target="d-crear">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e26" value="resumen_cola()" style="endArrow=block;html=1;strokeColor=#047857;fontSize=10;" edge="1" parent="1" source="b-cadm" target="d-res">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e27" value="loop" style="endArrow=block;html=1;dashed=1;strokeColor=#4300D2;fontSize=10;" edge="1" parent="1" source="loop" target="v-det">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="1150" y="900" as="sourcePoint" /><mxPoint x="150" y="900" as="targetPoint" /></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

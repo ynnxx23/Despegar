@@ -1,0 +1,6 @@
+# Solo lo que no se puede subir a GitHub (pesado / generado / datos locales).
+node_modules/
+.expo/
+dist/
+build/
+backend/uploads/
