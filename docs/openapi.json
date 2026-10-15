@@ -1,0 +1,285 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Despegar Incidentes API",
+    "version": "1.4.1"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000/api"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health con chequeo DB"
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "summary": "Contrato OpenAPI"
+      }
+    },
+    "/api/register": {
+      "post": {
+        "summary": "Alta viajero"
+      }
+    },
+    "/api/login": {
+      "post": {
+        "summary": "Login JWT 8h, rate-limit 10/min"
+      }
+    },
+    "/api/refresh": {
+      "post": {
+        "summary": "Rotacion refresh"
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "summary": "Revoca sesion o todas"
+      }
+    },
+    "/api/me": {
+      "get": {
+        "summary": "Sesion actual"
+      },
+      "delete": {
+        "summary": "Borrado GDPR"
+      }
+    },
+    "/api/email/solicitar": {
+      "post": {
+        "summary": "Token verificacion"
+      }
+    },
+    "/api/email/verificar": {
+      "post": {
+        "summary": "Verifica email"
+      }
+    },
+    "/api/password/solicitar": {
+      "post": {
+        "summary": "Solicita reset (siempre 200)"
+      }
+    },
+    "/api/password/restablecer": {
+      "post": {
+        "summary": "Restablece clave"
+      }
+    },
+    "/api/itinerario": {
+      "get": {
+        "summary": "Reservas propias"
+      }
+    },
+    "/api/incidentes/mios": {
+      "get": {
+        "summary": "Propios paginados, filtros estado/q"
+      }
+    },
+    "/api/incidentes": {
+      "post": {
+        "summary": "Crear, Idempotency-Key 8-64"
+      }
+    },
+    "/api/incidentes/{id}": {
+      "get": {
+        "summary": "Detalle duenio/agente"
+      }
+    },
+    "/api/incidentes/{id}/respuestas": {
+      "get": {
+        "summary": "Hilo publico paginado"
+      },
+      "post": {
+        "summary": "Replica viajero (reabre si Resuelto)"
+      }
+    },
+    "/api/incidentes/{id}/reabrir": {
+      "post": {
+        "summary": "Reabrir Resuelto"
+      }
+    },
+    "/api/incidentes/{id}/resumen": {
+      "get": {
+        "summary": "Resumen extractivo ?lang=es|en|pt"
+      }
+    },
+    "/api/incidentes/{id}/adjuntos": {
+      "get": {
+        "summary": "Listar adjuntos"
+      },
+      "post": {
+        "summary": "Subir base64 jpg/png/pdf 5MB"
+      }
+    },
+    "/api/incidentes/{id}/adjuntos/{adjId}/ocr": {
+      "post": {
+        "summary": "OCR + autovinculo reserva"
+      }
+    },
+    "/api/admin/incidentes": {
+      "get": {
+        "summary": "Cola filtros estado/prioridad/tipo/q/orden/paginacion"
+      }
+    },
+    "/api/admin/mi-cola": {
+      "get": {
+        "summary": "Asignados o seguidos"
+      }
+    },
+    "/api/admin/incidentes/resumen": {
+      "get": {
+        "summary": "Conteos + sin_triar/vencidos/mios"
+      }
+    },
+    "/api/admin/incidentes/{id}": {
+      "get": {
+        "summary": "Ver agente"
+      },
+      "put": {
+        "summary": "Triaje prioridad/estado con transicion valida"
+      }
+    },
+    "/api/admin/incidentes/{id}/respuestas": {
+      "get": {
+        "summary": "Hilo completo paginado"
+      },
+      "post": {
+        "summary": "Responder, interna opcional"
+      }
+    },
+    "/api/admin/incidentes/{id}/claim": {
+      "post": {
+        "summary": "Tomar caso transaccional"
+      }
+    },
+    "/api/admin/incidentes/{id}/release": {
+      "post": {
+        "summary": "Liberar"
+      }
+    },
+    "/api/admin/incidentes/{id}/derivar": {
+      "post": {
+        "summary": "Derivar transaccional"
+      }
+    },
+    "/api/admin/incidentes/{id}/seguir": {
+      "post": {
+        "summary": "Seguir"
+      },
+      "delete": {
+        "summary": "Dejar seguir"
+      }
+    },
+    "/api/admin/incidentes/{id}/historial": {
+      "get": {
+        "summary": "Eventos paginados con hash"
+      }
+    },
+    "/api/admin/incidentes/{id}/auditoria": {
+      "get": {
+        "summary": "Verificar hash encadenado"
+      }
+    },
+    "/api/admin/incidentes/{id}/auditoria/resellar": {
+      "post": {
+        "summary": "Resella hash con tolerancia legacy (sello prev null)"
+      }
+    },
+    "/api/admin/incidentes/{id}/ia": {
+      "get": {
+        "summary": "Triage IA score+explica"
+      }
+    },
+    "/api/admin/incidentes/{id}/copiloto": {
+      "post": {
+        "summary": "Sugerir respuesta (no envia)"
+      }
+    },
+    "/api/admin/incidentes/{id}/merge": {
+      "post": {
+        "summary": "Marcar Duplicado"
+      }
+    },
+    "/api/admin/incidentes/bulk": {
+      "post": {
+        "summary": "Bulk asignar/cerrar/priorizar/estado max 50"
+      }
+    },
+    "/api/admin/agentes": {
+      "get": {
+        "summary": "Lista equipo"
+      },
+      "post": {
+        "summary": "Alta agente"
+      }
+    },
+    "/api/admin/agentes/{id}/estado": {
+      "put": {
+        "summary": "Activa/desactiva"
+      }
+    },
+    "/api/admin/metricas": {
+      "get": {
+        "summary": "por_estado/vencidos/sin_triar/por_agente/mttr"
+      }
+    },
+    "/api/admin/metricas.csv": {
+      "get": {
+        "summary": "CSV dashboard"
+      }
+    },
+    "/api/admin/sla/riesgo": {
+      "get": {
+        "summary": "Vencen <6h + sugerencia reasignar"
+      }
+    },
+    "/api/admin/sla/revisar": {
+      "post": {
+        "summary": "Notifica vencidos"
+      }
+    },
+    "/api/notificaciones": {
+      "get": {
+        "summary": "Mias paginadas"
+      }
+    },
+    "/api/notificaciones/no-leidas": {
+      "get": {
+        "summary": "Conteo"
+      }
+    },
+    "/api/notificaciones/{id}/leer": {
+      "post": {
+        "summary": "Marcar leida"
+      }
+    },
+    "/api/notificaciones/leer-todas": {
+      "post": {
+        "summary": "Marcar todas"
+      }
+    },
+    "/api/chatbot/borrador": {
+      "post": {
+        "summary": "Borrador + faltantes"
+      }
+    },
+    "/api/stt/transcribir": {
+      "post": {
+        "summary": "Transcribe voz (Whisper o stub)"
+      }
+    },
+    "/api/stream": {
+      "get": {
+        "summary": "SSE snapshot no_leidas"
+      }
+    },
+    "/api/admin/stream": {
+      "get": {
+        "summary": "SSE snapshot no_leidas"
+      }
+    }
+  }
+}
