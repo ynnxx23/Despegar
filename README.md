@@ -28,6 +28,20 @@ Sin `pdo_pgsql` igual: el health responde, el login no.
 - `.github/workflows/ci.yml` CI: PostgreSQL 16 + API + suites de Node en cada push.
 - `Dockerfile` + `.dockerignore` imagen de producción para Railway; `.railwayignore` qué se sube. `docker-compose.yml` levanta la API + PostgreSQL en local.
 
+## Prender / apagar la API en Railway (sin comandos)
+
+Doble clic (o desde la terminal):
+
+| Script | Qué hace |
+|---|---|
+| `start-railway.cmd` | Enciende PostgreSQL y la API en Railway (~1-2 min) y verifica el health. Imprime la URL pública. |
+| `stop-railway.cmd` | Apaga ambos servicios: **0 CPU / 0 RAM facturados**. Los datos quedan en el volumen. |
+
+Ambos necesitan la CLI de Railway (`npm i -g @railway/cli`) y el proyecto vinculado
+(`railway link` → `despegar-api`). Deben correrse **desde la raíz del repo**.
+
+Equivalentes en PowerShell: `deploy\railway-resume.ps1` y `deploy\railway-pause.ps1`.
+
 ## Dev rápido (PostgreSQL local)
 Requisito PHP: extensión `pdo_pgsql` activa (`extension=pdo_pgsql` en `php.ini`).
 1. Crear rol/BD una vez (tu password, no se versiona): `createuser -U postgres -d despegar -P` y `createdb -U postgres -O despegar despegar`.
