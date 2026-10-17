@@ -11,7 +11,7 @@ del deploy) y a `README.md` (referencia de la API).
 ## TL;DR — la rutina de cada demo
 
 ```powershell
-# 1. Prender API + base en Railway (incluye el "railway up" de abajo)
+# 1. Prender API + base en Railway (doble clic: start-railway.cmd)
 powershell -ExecutionPolicy Bypass -File deploy\railway-resume.ps1
 
 # 2. (solo si cambió el schema de la base) aplicarlo con el túnel SSH abierto
@@ -25,6 +25,11 @@ start-agente.cmd
 # 4. Al terminar la demo, apagar para no gastar el límite de uso
 powershell -ExecutionPolicy Bypass -File deploy\railway-pause.ps1
 ```
+
+O bien, sin tocar PowerShell: **`start-railway.cmd`** (enciende y verifica el health)
+y **`stop-railway.cmd`** (apaga: 0 CPU / 0 RAM facturados). Los dos son doble clic
+desde la raíz del repo y necesitan la CLI de Railway (`npm i -g @railway/cli`) con el
+proyecto `despegar-api` vinculado (`railway link`).
 
 Equivalente manual del paso 1 (lo que hace el script):
 
