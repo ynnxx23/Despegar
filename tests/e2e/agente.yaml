@@ -1,0 +1,17 @@
+# e2e agente con Maestro. Requiere backend :8000 + caso creado por viajero.yaml.
+# Uso: maestro test tests/e2e/agente.yaml
+appId: com.despegar.agente
+---
+- launchApp
+- inputText: "agente@despegar.com"
+- tapOn: "Contraseña"
+- inputText: "Agente123"
+- tapOn: "Entrar"
+- assertVisible: "Cola"
+- tapOn: "Sin triar"
+- tapOn:
+    text: "Reclamar"
+    index: 0
+- tapOn: "Copiloto: redactar"
+- tapOn: "Enviar respuesta"
+- assertVisible: "Hilo"

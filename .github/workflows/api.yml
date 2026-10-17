@@ -1,0 +1,57 @@
+name: api
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - 'db/**'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'db/**'
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: despegar
+          POSTGRES_USER: despegar
+          POSTGRES_PASSWORD: despegar_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U despegar"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_pgsql
+      - name: Lint PHP
+        run: |
+          for f in $(find backend -name '*.php'); do php -l "$f" || exit 1; done
+      - name: Schema + migraciones
+        env:
+          PGPASSWORD: despegar_dev
+        run: |
+          psql -h 127.0.0.1 -U despegar -d despegar -f db/schema.sql -f db/seeds.sql
+          psql -h 127.0.0.1 -U despegar -d despegar -f db/migrate_02_prioridad_nullable.sql -f db/migrate_03_gestion_casos.sql -f db/migrate_04_gestion_completa.sql -f db/migrate_05_fase4.sql
+          psql -h 127.0.0.1 -U despegar -d despegar -c "SELECT version FROM schema_migrations ORDER BY 1;"
+      - name: Smoke health
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_NAME: despegar
+          DB_USER: despegar
+          DB_PASS: despegar_dev
+          JWT_SECRET: ci_secreto_largo_de_mas_de_32_bytes_123
+        run: |
+          cp backend/.env.example backend/.env
+          php -S 127.0.0.1:8000 -t backend/public >/tmp/php.log 2>&1 &
+          sleep 2
+          curl -sf http://127.0.0.1:8000/api/health
