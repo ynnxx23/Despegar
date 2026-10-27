@@ -50,7 +50,7 @@ railway up --service api --detach
 | Railway CLI | 5.x | deploy / pausa de la API | `railway --version` |
 | PowerShell | 5.1+ | scripts de `deploy\` | `powershell -Command $PSVersionTable.PSVersion` |
 | Git | cualquiera | clonar el repo | `git --version` |
-| PHP 8.2 + `pdo_pgsql` | 8.2 | **solo** si corrés el backend local (`C:\xampp\php\php.exe`) | `php -m \| findstr pdo_pgsql` |
+| PHP 8.5.12 + `pdo_pgsql` | 8.5.12 | **solo** si corrés el backend local (`C:\xampp\php\php.exe`) | `php -m \| findstr pdo_pgsql` |
 | PostgreSQL | 15+ | **solo** si corrés la BD local | `psql --version` |
 | Docker Desktop | opcional | `docker compose up --build` (API + BD local) | `docker --version` |
 

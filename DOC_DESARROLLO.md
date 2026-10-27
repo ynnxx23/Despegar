@@ -9,12 +9,12 @@
 |---|---|---|---|
 | Apps móviles | React Native + Expo (JavaScript) | Expo SDK 57, RN 0.86, React 19.2 | Sin React Navigation ni Axios (decisión §12) |
 | Almacenamiento móvil | expo-secure-store | 57.x | Token fuera de AsyncStorage plano |
-| Backend | PHP POO + PDO | PHP 8.2 | Sin framework; front-controller propio |
+| Backend | PHP POO + PDO | PHP 8.5.12 | Sin framework; front-controller propio |
 | Base de datos | PostgreSQL | 15 (imagen Docker: 16) | Rutinas en plpgsql/SQL |
 | Driver PHP-DB | pdo_pgsql | (extensión `php.ini`) | prepared nativo, sin emulación |
-| Entorno local | PHP 8.2 CLI + servicio PostgreSQL x64 15 | — | Solo PostgreSQL desde el inicio |
+| Entorno local | PHP 8.5.12 CLI + servicio PostgreSQL x64 15 | — | Solo PostgreSQL desde el inicio |
 | Utilidades | Node 24, Python 3.8, PowerShell 5.1, Git 2.51 | — | Scripts de test en `.ps1` |
-| Docker | Compose (opcional) | php:8.2-apache, postgres:16 | Solo `config` validado; `up` manual |
+| Docker | Compose (opcional) | php:8.5.12-apache, postgres:16 | Solo `config` validado; `up` manual |
 
 Dependencia móvil justificada: `expo-secure-store` (requisito TRANS-70, token seguro).
 `@expo/vector-icons` NO se usa (iconografía con texto; ver §13).
@@ -52,7 +52,7 @@ despegar/
   docs/                      # api.md, app-viajero.md, app-agente.md, railway.md
   tests/                     # api_f2_auth, api_f3_dominio, api_f7_integracion, api_f8_gestion
                               #   (.ps1) + mint_expired.php + api_client_refresh.test.mjs (Node)
-  docker-compose.yml         # postgres:16 + api php:8.2-apache (opcional)
+  docker-compose.yml         # postgres:16 + api php:8.5.12-apache (opcional)
   Dockerfile / .dockerignore # imagen de producción para Railway
   .railwayignore             # qué se sube con `railway up`
 ```

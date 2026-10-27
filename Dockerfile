@@ -1,6 +1,6 @@
-# Despegar - API en Railway (PHP 8.2 CLI + pdo_pgsql)
+# Despegar - API en Railway (PHP 8.5.12 CLI + pdo_pgsql)
 # Build context: raiz del repo. Imagen minima, sin Apache ni vendor (cero dependencias).
-FROM php:8.2-cli
+FROM php:8.5.12-cli
 
 # pdo_pgsql necesita libpq-dev para linkear; se limpia el cache de apt.
 RUN apt-get update \

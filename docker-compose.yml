@@ -2,7 +2,7 @@
 #   docker compose up --build      -> API en http://localhost:8000/api/health
 #                                    PostgreSQL en localhost:5432
 #
-# La API usa el Dockerfile de la raiz (php:8.2-cli + pdo_pgsql), el mismo que
+# La API usa el Dockerfile de la raiz (php:8.5.12-cli + pdo_pgsql), el mismo que
 # usa Railway: el front-controller es backend/public/index.php y la base es /api.
 #
 # NOTA: los scripts de /docker-entrypoint-initdb.d/ solo corren la PRIMERA vez

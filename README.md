@@ -7,7 +7,7 @@ Cuentas de prueba (admins, agentes y viajeros): **`datos.md`**.
 | Componente | Versión | Verificación |
 |---|---|---|
 | PostgreSQL | 15 x64 | servicio en `:5432`; BD `despegar`, rol `despegar` con password propia (solo en `backend/.env`) |
-| PHP | 8.2 | `C:\xampp\php\php.exe` con `extension=pdo_pgsql` activa en `php.ini` |
+| PHP | 8.5.12 | `C:\xampp\php\php.exe` con `extension=pdo_pgsql` activa en `php.ini` |
 | Node.js + npm | 20+ | `node --version` (Expo SDK 57) |
 | Expo Go | en el celular | app oficial, misma versión SDK 57 del proyecto |
 | Red | PC y celular en la **misma** Wi-Fi/LAN | el celular llega a `http://<IP-LAN-PC>:8000` (API) y `:8081`/`:8082` (Metro) |
@@ -17,7 +17,7 @@ Sin PostgreSQL la API responde `/api/health` pero falla todo lo que toque la BD.
 Sin `pdo_pgsql` igual: el health responde, el login no.
 
 ## Estructura
-- `backend/` PHP 8.2 POO + PDO pgsql (sin framework). Entrada: `backend/public/index.php` (tabla de rutas con roles, 405 real y versionado `/api` + `/api/v1`). Modelos: `Usuario`, `Reserva`, `Incidente`, `GestionCaso` (asignado/seguidores/eventos), `Respuesta`, `RefreshToken`, `Auditoria` (historial de cambios de usuarios).
+- `backend/` PHP 8.5.12 POO + PDO pgsql (sin framework). Entrada: `backend/public/index.php` (tabla de rutas con roles, 405 real y versionado `/api` + `/api/v1`). Modelos: `Usuario`, `Reserva`, `Incidente`, `GestionCaso` (asignado/seguidores/eventos), `Respuesta`, `RefreshToken`, `Auditoria` (historial de cambios de usuarios).
 - `db/` schema + seeds PostgreSQL (`schema.sql` crea tablas, triggers `trg_incidentes_touch`/`trg_incidentes_agente`, funciones `touch_actualizado_at()`, `chequear_agente_asignado()`, `crear_respuesta()`, `resumen_cola()`, helpers `upsert_*` y el procedimiento `sembrar_demo()` en `seed_demo.sql`; `seeds.sql` = `CALL sembrar_demo()`) + `migrate_0*.sql` (para bases con un schema anterior).
 - `apps/viajero/` App 1 Portal Ayuda al Viajero (Expo RN).
 - `apps/agente/` App 2 Centro Resolución (Expo RN) + `components/` (paneles y estilos de la gestión) + `screens/AdminUsuariosScreen.js` (panel de administración de usuarios, solo rol `admin`).
@@ -51,7 +51,7 @@ Requisito PHP: extensión `pdo_pgsql` activa (`extension=pdo_pgsql` en `php.ini`
 4. `php -S localhost:8000 -t backend/public` → `GET http://localhost:8000/api/health`.
 
 Opción B con Docker (opcional): `docker compose up --build` → API `:8000`, PostgreSQL `:5432`.
-El compose usa el `Dockerfile` de la raíz (php:8.2-cli + `pdo_pgsql`, el mismo de Railway) y monta
+El compose usa el `Dockerfile` de la raíz (php:8.5.12-cli + `pdo_pgsql`, el mismo de Railway) y monta
 `db/schema.sql` + `db/seeds.sql` (más `db/seed_demo.sql`, que el schema incluye con `\ir`) en
 `/docker-entrypoint-initdb.d/`: la base se crea sola con el seed demo y la API espera a que PostgreSQL esté sano.
 Si el volumen `pgdata` ya existe, los scripts **no** se vuelven a correr: `docker compose down -v && docker compose up --build`.

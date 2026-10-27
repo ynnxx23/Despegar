@@ -5,7 +5,7 @@
 
 ## 1. Stack y entrada
 
-- PHP 8.2 POO + PDO `pgsql`, sin framework. Único punto de entrada: `backend/public/index.php`.
+- PHP 8.5.12 POO + PDO `pgsql`, sin framework. Único punto de entrada: `backend/public/index.php`.
 - Base de datos PostgreSQL 15 (imagen Docker 16). Schema + seeds en `db/`.
 - Requiere extensión `pdo_pgsql` activa en `php.ini`.
 

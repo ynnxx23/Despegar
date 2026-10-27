@@ -10,7 +10,7 @@ on:
 
 jobs:
   api:
-    name: API (PHP 8.2 + PostgreSQL 16)
+    name: API (PHP 8.5.12 + PostgreSQL 16)
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -43,10 +43,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Instalar PHP 8.2 (pdo_pgsql)
+      - name: Instalar PHP 8.5.12 (pdo_pgsql)
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.5.12'
           extensions: pdo_pgsql
           coverage: none
           tools: none

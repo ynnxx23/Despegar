@@ -8,7 +8,7 @@ la misma Wi-Fi que la PC ni la PC encendida: las dos apps pegan contra
 `https://api-production-88975.up.railway.app/api`.
 
 ```
-Celular (Expo Go)  ──HTTPS──>  Railway: servicio "api" (Dockerfile, PHP 8.2 CLI)
+Celular (Expo Go)  ──HTTPS──>  Railway: servicio "api" (Dockerfile, PHP 8.5.12 CLI)
                                         │
                                         └──> Railway Postgres (plugin, red privada)
 ```
@@ -17,14 +17,14 @@ Celular (Expo Go)  ──HTTPS──>  Railway: servicio "api" (Dockerfile, PHP 
 
 | Servicio | Qué es | Origen |
 |---|---|---|
-| `api` | API PHP 8.2 (server embebido) | `Dockerfile` de la raíz del repo |
+| `api` | API PHP 8.5.12 (server embebido) | `Dockerfile` de la raíz del repo |
 | `Postgres` | PostgreSQL 18 (plugin oficial) | volumen persistente `postgres-volume` |
 
 ## Archivos del repo que sostienen el deploy
 
 | Archivo | Para qué |
 |---|---|
-| `Dockerfile` | imagen `php:8.2-cli` + `pdo_pgsql`, escucha `$PORT`, 8 workers, healthcheck con switch |
+| `Dockerfile` | imagen `php:8.5.12-cli` + `pdo_pgsql`, escucha `$PORT`, 8 workers, healthcheck con switch |
 | `.dockerignore` | excluye `backend/.env` y el resto del repo del build |
 | `.railwayignore` | qué se sube con `railway up` |
 | `deploy/init-db.ps1` | aplica schema + seeds (base nueva) o seeds + migraciones (base v2) contra la BD remota |
