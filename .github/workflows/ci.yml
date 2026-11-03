@@ -1,6 +1,6 @@
-name: CI
+﻿name: CI
 
-# Pipeline de integración continua: levanta PostgreSQL, aplica el schema + seeds,
+# Pipeline de integraciÃ³n continua: levanta PostgreSQL, aplica el schema + seeds,
 # levanta la API y corre las suites de tests. No usa secrets: valores de prueba fijos.
 on:
   push:
@@ -122,6 +122,18 @@ jobs:
       - name: Tests del cliente movil (node:test)
         run: node --test tests/api_client_refresh.test.mjs
 
+      - name: Tests de dominio y autenticacion (PowerShell F2/F3)
+        shell: pwsh
+        run: |
+          pwsh -ExecutionPolicy Bypass -File tests/api_f2_auth.ps1
+          pwsh -ExecutionPolicy Bypass -File tests/api_f3_dominio.ps1
+
+      - name: Tests de gestion (PowerShell F7/F8)
+        shell: pwsh
+        run: |
+          pwsh -ExecutionPolicy Bypass -File tests/api_f7_integracion.ps1
+          pwsh -ExecutionPolicy Bypass -File tests/api_f8_gestion.ps1
+
       - name: Subir los logs de la API (si algo fallo)
         if: failure()
         uses: actions/upload-artifact@v4
@@ -132,3 +144,4 @@ jobs:
             backend/var/ratelimit
           if-no-files-found: warn
           retention-days: 7
+
