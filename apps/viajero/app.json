@@ -1,4 +1,4 @@
-{
+﻿{
   "expo": {
     "name": "Despegar Ayuda al Viajero",
     "slug": "despegar-viajero",
@@ -10,12 +10,8 @@
     },
     "android": {
       "package": "com.despegar.viajero"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "bce938d7-817f-48b9-94e3-7dae8bfed331"
-      }
-    },
+    }},
     "owner": "ynnxx23"
   }
 }
+

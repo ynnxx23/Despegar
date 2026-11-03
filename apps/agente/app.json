@@ -1,4 +1,4 @@
-{
+﻿{
   "expo": {
     "name": "Despegar Resolucion",
     "slug": "despegar-agente",
@@ -10,12 +10,8 @@
     },
     "android": {
       "package": "com.despegar.agente"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "b1437ea4-0e65-4bcb-aae4-4cbbf71052bb"
-      }
-    },
+    }},
     "owner": "ynnxx23"
   }
 }
+
