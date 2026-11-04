@@ -137,6 +137,10 @@ class Incidente {
       $sql .= ' AND i.tipo = ?';
       $params[] = $tipo;
     }
+    $sinReclamar = $f['sin_reclamar'] ?? null;
+    if ($sinReclamar === true || $sinReclamar === '1') {
+      $sql .= ' AND i.asignado_a IS NULL AND i.estado = \'Abierto\'';
+    }
     return $sql;
   }
 

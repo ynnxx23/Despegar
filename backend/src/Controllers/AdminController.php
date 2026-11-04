@@ -22,6 +22,7 @@ class AdminController {
     if ($tipo !== null && !in_array($tipo, Incidente::TIPOS, true)) {
       Response::error('Tipo invalido', 400);
     }
+    $sinReclamar = isset($query['sin_reclamar']) && $query['sin_reclamar'] === '1';
     $orden = strtolower((string)($query['orden'] ?? 'urgencia'));
     if (!in_array($orden, ['asc', 'desc', 'urgencia'], true)) {
       Response::error('Orden invalido (asc|desc|urgencia)', 400);
@@ -29,7 +30,7 @@ class AdminController {
     $limit = min(max((int)($query['limit'] ?? 20), 1), 50);
     $page = max((int)($query['page'] ?? 1), 1);
     return [
-      'filtros' => ['estado' => $estado, 'prioridad' => $prioridad, 'tipo' => $tipo],
+      'filtros' => ['estado' => $estado, 'prioridad' => $prioridad, 'tipo' => $tipo, 'sin_reclamar' => $sinReclamar],
       'orden' => $orden,
       'limit' => $limit,
       'page' => $page,

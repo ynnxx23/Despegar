@@ -163,7 +163,7 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
     if (tab === 'Sin reclamar') { p.set('estado', 'activos'); p.set('sin_reclamar', '1'); }
     if (tab === 'Resueltos') p.set('estado', 'Resuelto');
     if (tab === 'Míos' || tab === 'Siguiendo') p.set('vista', tab === 'Míos' ? 'mios' : 'siguiendo');
-    if (prioFiltro !== 'Todas' && tab !== 'Sin triar' && tab !== 'Sin reclamar') p.set('prioridad', prioFiltro);
+    if (prioFiltro !== 'Todas' && tab !== 'Sin triar') p.set('prioridad', prioFiltro);
     if (tipoFiltro !== 'Todos') p.set('tipo', tipoFiltro);
     return p.toString();
   }, [tab, orden, page, prioFiltro, tipoFiltro]);
