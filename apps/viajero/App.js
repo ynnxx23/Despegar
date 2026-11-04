@@ -70,8 +70,21 @@ function AppShell() {
     setReportEnviado(false);
   }
 
+  // Abre el detalle de un incidente (cierra cualquier detalle previo y muestra el nuevo).
+  function abrirDetalle(id) {
+    setDetalleId(id);
+  }
+
+  // Cierra el detalle y vuelve a la lista de incidentes.
+  function cerrarDetalle() {
+    setDetalleId(null);
+    setMiosKey((k) => k + 1);
+  }
+
   function goTab(key) {
     verTab(key);
+    // Salir del detalle si estaba abierto: el usuario nunca queda atrapado en la pantalla de detalle.
+    if (detalleId !== null) setDetalleId(null);
     setTab(key);
     if (key === 'nuevo' && tab !== 'nuevo' && reportEnviado) limpiarFormulario();
   }
@@ -126,11 +139,51 @@ function AppShell() {
     }
     if (key === 'mios') {
       return (
-        <MisIncidentesScreen onOpen={setDetalleId} refreshKey={miosKey} onReportar={handleReportar} />
+        <MisIncidentesScreen onOpen={abrirDetalle} refreshKey={miosKey} onReportar={handleReportar} />
       );
     }
     if (key === 'perfil') return <PerfilScreen user={session.user} onLogout={confirmarSalida} />;
     return <AyudaScreen />;
+  }
+
+  // Cuando hay un detalle abierto, se muestra SOLO el detalle (reemplaza la vista principal).
+  // El nav inferior sigue visible para que el usuario nunca quede atrapado.
+  if (detalleId !== null) {
+    return (
+      <View style={styles.root}>
+        <View style={[styles.header, { paddingTop: insets.top + theme.spacing.md }]}>
+          <View style={styles.userRow}>
+            <View style={styles.avatar} accessible accessibilityLabel={`Perfil de ${session.user?.nombre || 'viajero'}`}>
+              <Text style={styles.avatarText}>{String(session.user?.nombre || session.user?.email || 'V').trim().charAt(0).toUpperCase() || 'V'}</Text>
+            </View>
+            <Text style={styles.hello}>Hola, {session.user?.nombre || 'Viajero'}</Text>
+          </View>
+          <Pressable
+            onPress={confirmarSalida}
+            accessibilityRole="button"
+            accessibilityLabel="Salir de la cuenta"
+            style={styles.exitBtn}
+          >
+            <Text style={styles.exit}>Salir</Text>
+          </Pressable>
+        </View>
+        <DetalleIncidenteScreen id={detalleId} onBack={cerrarDetalle} />
+        {/* Nav inferior siempre visible para que el usuario nunca quede atrapado */}
+        <View style={[styles.tabs, { paddingBottom: insets.bottom, minHeight: 56 + insets.bottom }]}>
+          {TABS.map((t) => (
+            <Pressable
+              key={t.key}
+              onPress={() => goTab(t.key)}
+              style={[styles.tab, tab === t.key && styles.tabActive]}
+              accessibilityRole="button"
+              accessibilityLabel={`Ir a ${t.label}`}
+              accessibilityState={{ selected: tab === t.key }}>
+              <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    );
   }
 
   if (session.estado === 'cargando') {
@@ -208,31 +261,21 @@ function AppShell() {
             {renderPantalla(t.key)}
           </View>
         ))}
-        {detalleId !== null && (
-          <View style={styles.detalle}>
-            <DetalleIncidenteScreen
-              id={detalleId}
-              onBack={() => { setDetalleId(null); setMiosKey((k) => k + 1); }}
-            />
-          </View>
-        )}
       </View>
-
-      {detalleId === null && (
-        <View style={[styles.tabs, { paddingBottom: insets.bottom, minHeight: 56 + insets.bottom }]}>
-          {TABS.map((t) => (
-            <Pressable
-              key={t.key}
-              onPress={() => goTab(t.key)}
-              style={[styles.tab, tab === t.key && styles.tabActive]}
-              accessibilityRole="button"
-              accessibilityLabel={`Ir a ${t.label}`}
-              accessibilityState={{ selected: tab === t.key }}>
-              <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
+      {/* Nav inferior siempre visible */}
+      <View style={[styles.tabs, { paddingBottom: insets.bottom, minHeight: 56 + insets.bottom }]}>
+        {TABS.map((t) => (
+          <Pressable
+            key={t.key}
+            onPress={() => goTab(t.key)}
+            style={[styles.tab, tab === t.key && styles.tabActive]}
+            accessibilityRole="button"
+            accessibilityLabel={`Ir a ${t.label}`}
+            accessibilityState={{ selected: tab === t.key }}>
+            <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -264,7 +307,6 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   pane: { flex: 1 },
   paneOculto: { display: 'none' },
-  detalle: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.background },
   tabs: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.card },
   tab: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center' },
   tabActive: { borderTopWidth: 3, borderTopColor: theme.colors.primary },

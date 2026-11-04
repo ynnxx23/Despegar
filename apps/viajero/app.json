@@ -9,13 +9,17 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.despegar.viajero"
+      "package": "com.despegar.viajero",
+      "versionCode": 2
     },
     "extra": {
       "eas": {
         "projectId": "bce938d7-817f-48b9-94e3-7dae8bfed331"
       }
     },
-    "owner": "ynnxx23"
+    "owner": "ynnxx23",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }

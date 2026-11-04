@@ -10,7 +10,7 @@ const MAX_MOTIVO = 500;
 const PRIORIDADES = ['Baja', 'Alta', 'Critica'];
 const ESTADOS = ['Abierto', 'EnGestion', 'Resuelto'];
 
-function ResumenCaso({ inc }) {
+export function ResumenCaso({ inc }) {
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>#{inc.id} · {inc.titulo}</Text>
@@ -27,7 +27,7 @@ function ResumenCaso({ inc }) {
   );
 }
 
-function PanelAccion({
+export function PanelAccion({
   nombreAsignado, esMio, sinAsignar, siguiendo, nombresSeguidores, savingAccion,
   onReclamar, onLiberar, onSeguir, derivacion,
 }) {
@@ -120,7 +120,7 @@ function PanelAccion({
   );
 }
 
-function PanelViajero({ viajero, reserva }) {
+export function PanelViajero({ viajero, reserva }) {
   const linea = reserva
     ? `${TIPO_RESERVA?.[reserva?.tipo] || reserva?.tipo || 'Reserva'} · ${reserva?.codigo ?? reserva?.id ?? '—'}`
     : null;
@@ -147,7 +147,7 @@ function PanelViajero({ viajero, reserva }) {
   );
 }
 
-function PanelTriaje({ inc, sugerida, motivoSugerida, savingPut, onPrioridad, onEstado, reapertura }) {
+export function PanelTriaje({ inc, sugerida, motivoSugerida, savingPut, onPrioridad, onEstado, reapertura }) {
   return (
     <>
       <Text style={styles.label}>Prioridad</Text>
@@ -214,7 +214,7 @@ function PanelTriaje({ inc, sugerida, motivoSugerida, savingPut, onPrioridad, on
   );
 }
 
-function PanelRespuesta({ hilo, mensaje, onMensaje, savingReply, onResponder, nombreViajero, puedeResponder = true }) {
+export function PanelRespuesta({ hilo, mensaje, onMensaje, savingReply, onResponder, nombreViajero, puedeResponder = true }) {
   const esDeAgente = (m) => {
     if (m?.autor_rol) return m.autor_rol === 'agente';
     if (nombreViajero) return m?.autor !== nombreViajero;
@@ -258,7 +258,7 @@ function PanelRespuesta({ hilo, mensaje, onMensaje, savingReply, onResponder, no
   );
 }
 
-function PanelHistorial({ historial }) {
+export function PanelHistorial({ historial }) {
   return (
     <>
       <Text style={styles.subtitle}>Historial</Text>
