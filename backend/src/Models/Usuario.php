@@ -1,8 +1,7 @@
 <?php
 // Modelo Usuario: POO + encapsulamiento + PDO prepared (anti SQLi).
-// password_hash / password_verify con BCRYPT (salt automático).
+// password_hash / password_verify con BCRYPT (salt automatico).
 class Usuario {
-  // Roles cerrados: viajero, agente y admin (admin administra usuarios y agentes).
   public const ROLES = ['viajero', 'agente', 'admin'];
 
   private PDO $db;

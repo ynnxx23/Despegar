@@ -2,6 +2,7 @@
 // PDO singleton con prepared statements (anti SQLi). PostgreSQL 15.
 class Database {
   private static ?PDO $pdo = null;
+
   public static function pdo(): PDO {
     if (self::$pdo) return self::$pdo;
     [$host, $port, $name, $user, $pass] = self::target();
@@ -25,7 +26,7 @@ class Database {
     if ($url !== '') {
       $p = parse_url($url);
       if (!is_array($p) || !isset($p['host'])) {
-        throw new RuntimeException('DATABASE_URL inválida o ausente');
+        throw new RuntimeException('DATABASE_URL invalida o ausente');
       }
       return [
         $p['host'],

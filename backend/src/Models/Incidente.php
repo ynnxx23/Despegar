@@ -1,6 +1,5 @@
 <?php
 // Incidente: dominio Grupo 8. Prioridad Baja/Alta/Critica, estado Abierto/EnGestion/Resuelto.
-// Gestion de casos: sugerencia de prioridad, SLA, asignado, eventos y seguidores.
 class Incidente {
   public const TIPOS = [
     'Vuelo_cancelado', 'Vuelo_retrasado', 'Hotel_sin_reserva',
@@ -89,11 +88,10 @@ class Incidente {
       );
       $st->execute([$userId, $reservaId, $tipo, $titulo, $descripcion, $sugerida, $motivo]);
     } catch (PDOException $e) {
-      // Sin fallback silencioso: si falta la columna de sugerencia, la base esta
-      // desactualizada y hay que correr las migraciones (no perder datos en silencio).
+      // Sin fallback silencioso: si falta la columna de sugerencia, la base esta desactualizada.
       if (($e->errorInfo[0] ?? '') === '42703') {
-        error_log('incidentes: falta la columna de sugerencia. Corré db/migrate_*.sql');
-        Response::error('La base de datos está desactualizada: falta aplicar migraciones', 500);
+        error_log('incidentes: falta la columna de sugerencia. Correr db/migrate_*.sql');
+        Response::error('La base de datos esta desactualizada: falta aplicar migraciones', 500);
       }
       throw $e;
     }
@@ -117,14 +115,7 @@ class Incidente {
       " creado_at ASC";
   }
 
-  /**
-   * Filtros de la cola (los mismos para listar y para contar, para que el total
-   * de la pagina coincida con lo que se ve).
-   *   estado      : 'Abierto' | 'EnGestion' | 'Resuelto' | 'activos' (todo lo no resuelto)
-   *   prioridad   : 'Baja' | 'Alta' | 'Critica' | 'sin_triar' (sin priorizar)
-   *   tipo        : uno de Incidente::TIPOS
-   *   vista       : 'mios' | 'siguiendo' (solo para la cola propia)
-   */
+  // Filtros de la cola (los mismos para listar y para contar, para que el total coincida).
   private static function filtrosSql(array $f, array &$params): string {
     $sql = '';
     $estado = $f['estado'] ?? null;
@@ -150,8 +141,7 @@ class Incidente {
   }
 
   public function listAll(array $filtros, string $orden, int $limit, int $offset, ?int $agenteId = null): array {
-    // Proyeccion agente: incluye quien tiene el caso (asignado_nombre), cuantos lo siguen
-    // y si el agente que consulta lo sigue (siguiendo).
+    // Proyeccion agente: incluye quien tiene el caso, cuantos lo siguen y si el agente lo sigue.
     $sql = 'SELECT i.*, u.nombre AS asignado_nombre,'
       . ' (SELECT COUNT(*) FROM incidente_seguidores s WHERE s.incidente_id = i.id) AS seguidores_count';
     $params = [];
@@ -264,11 +254,10 @@ class Incidente {
       $st = $this->db->prepare('UPDATE incidentes SET ' . implode(', ', $sets) . ' WHERE id = ?');
       $st->execute($params);
     } catch (PDOException $e) {
-      // Sin fallback silencioso: si faltan columnas de triaje/SLA la base esta
-      // desactualizada y hay que correr db/migrate_*.sql.
+      // Sin fallback silencioso: si faltan columnas de triaje/SLA la base esta desactualizada.
       if (($e->errorInfo[0] ?? '') === '42703') {
-        error_log('incidentes: faltan columnas de triaje/SLA. Corré db/migrate_*.sql');
-        Response::error('La base de datos está desactualizada: falta aplicar migraciones', 500);
+        error_log('incidentes: faltan columnas de triaje/SLA. Correr db/migrate_*.sql');
+        Response::error('La base de datos esta desactualizada: falta aplicar migraciones', 500);
       }
       throw $e;
     }

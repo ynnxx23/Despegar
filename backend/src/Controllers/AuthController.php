@@ -23,7 +23,6 @@ class AuthController {
     ];
   }
 
-  // IP del cliente: detras de un proxy (Railway) llega REMOTE_ADDR del proxy.
   private static function ip(): string {
     return (string)($_SERVER['REMOTE_ADDR'] ?? 'desconocida');
   }
@@ -47,13 +46,13 @@ class AuthController {
     );
 
     if (mb_strlen($nombre) < 2 || mb_strlen($nombre) > 100) {
-      Response::error('Nombre inválido (2 a 100 caracteres)', 400);
+      Response::error('Nombre invalido (2 a 100 caracteres)', 400);
     }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 160) {
-      Response::error('Email inválido', 400);
+      Response::error('Email invalido', 400);
     }
     if (strlen($password) < 8 || strlen($password) > 72) {
-      Response::error('Password inválida (8 a 72 caracteres)', 400);
+      Response::error('Password invalida (8 a 72 caracteres)', 400);
     }
     if (Config::get('JWT_SECRET', '') === '') {
       Response::error('Servidor sin JWT_SECRET configurado', 500);
@@ -64,7 +63,7 @@ class AuthController {
       Response::error('El email ya está registrado', 409);
     }
 
-    // Decisión §22 plan: registro público SOLO crea viajero (agentes por seed/admin).
+    // Decisión plan §22: registro publico SOLO crea viajero (agentes por seed/admin).
     // Guarda contra carrera (doble click): unique violation 23505 -> 409.
     try {
       $id = $u->create($nombre, $email, Usuario::hashPassword($password), 'viajero');
@@ -105,7 +104,7 @@ class AuthController {
     $row = $u->findByEmail($email);
     // Mensaje genérico para no revelar si el email existe.
     if (!$row || !password_verify($password, $row['password_hash'])) {
-      Response::error('Credenciales inválidas', 401);
+      Response::error('Credenciales invalidas', 401);
     }
     // Cuenta desactivada por un admin: solo lo sabe quien tiene la password.
     if (array_key_exists('activo', $row) && !$row['activo']) {
@@ -126,11 +125,11 @@ class AuthController {
       'Demasiadas renovaciones de sesión. Probá de nuevo en un minuto.'
     );
     if (!is_string($crudo) || strlen($crudo) < 32) {
-      Response::error('Refresh token inválido', 401);
+      Response::error('Refresh token invalido', 401);
     }
     $rotado = RefreshToken::rotar($db, $crudo);
     if ($rotado === null) {
-      Response::error('Refresh token inválido o expirado', 401);
+      Response::error('Refresh token invalido o expirado', 401);
     }
     [$usuarioId, $nuevo] = $rotado;
     $u = new Usuario($db);

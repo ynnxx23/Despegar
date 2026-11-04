@@ -1,7 +1,5 @@
 <?php
 // Historial de cambios de usuarios (tabla usuarios_auditoria).
-// Cada accion de un admin queda registrada con el actor, el campo afectado
-// y los valores anterior/nuevo.
 class Auditoria {
   public static function registrar(
     PDO $db,

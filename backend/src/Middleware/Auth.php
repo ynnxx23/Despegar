@@ -2,8 +2,6 @@
 // Middleware auth: extrae Bearer JWT, valida firma+exp y revalida el rol contra la BD.
 // Uso: $claims = Auth::requireRole($db, ['viajero','agente']); 401/403 si falla.
 class Auth {
-  // Cache de compatibilidad: si la columna "activo" todavia no existe (base vieja),
-  // se consulta sin ella en vez de romper todos los endpoints.
   private static ?bool $tieneActivo = null;
 
   public static function bearer(): ?string {

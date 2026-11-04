@@ -1,13 +1,10 @@
 <?php
 // Limitador de peticiones por clave (IP, email, etc.) con archivo y flock.
-// El server embebido de PHP corre varios workers (PHP_CLI_SERVER_WORKERS),
-// asi que un contador en memoria no serviria: cada proceso contaria aparte.
 class RateLimit {
   /** @return array{ok:bool, restantes:int, reinicia_en:int} */
   public static function hit(string $clave, int $max, int $ventanaSegundos): array {
     $dir = self::dir();
     if ($dir === null) {
-      // Sin filesystem escribible: se deja pasar (fail-open) y se avisa en el log.
       error_log('RateLimit: sin directorio writable, se omite el limite de ' . $clave);
       return ['ok' => true, 'restantes' => $max, 'reinicia_en' => 0];
     }
@@ -38,7 +35,7 @@ class RateLimit {
       fwrite($fh, json_encode($estado));
       fflush($fh);
 
-      // Limpieza oportunista de cuotas viejas (no bloquea el flujo).
+      // Limpieza oportunista de cuotas viejas (1% de probabilidad).
       if (random_int(1, 100) === 1) self::limpiar($dir, $ahora);
 
       return ['ok' => (int)$estado['n'] <= $max, 'restantes' => $restantes, 'reinicia_en' => $reinicia];

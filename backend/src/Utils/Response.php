@@ -7,6 +7,7 @@ class Response {
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit;
   }
+
   public static function error(string $message, int $status, array $details = []): void {
     self::json(['error' => ['code' => $status, 'message' => $message] + ($details ? ['details' => $details] : [])], $status);
   }

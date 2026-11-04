@@ -2,8 +2,8 @@
 // pestañas sin librerías: Itinerario · Reportar · Mis incidentes · Ayuda (+ detalle).
 // Reglas: un error de red NO destruye la sesión (lo resuelve useSession) y las
 // pantallas de pestaña quedan montadas para no perder el borrador del reporte.
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../shared/theme';
 import { useSession } from '../shared/session';
@@ -45,6 +45,20 @@ function AppShell() {
   // Una pestaña se monta la primera vez que se abre y después nunca se desmonta:
   // así el borrador del reporte sobrevive al cambio de pestaña.
   const [visitados, setVisitados] = useState({ itinerario: true });
+
+  // Botón atrás de Android: cierra el detalle si está abierto, si no no hace nada (no cierra la app).
+  useEffect(() => {
+    const onBackPress = () => {
+      if (detalleId !== null) {
+        setDetalleId(null);
+        setMiosKey((k) => k + 1);
+        return true; // evita que se cierre la app
+      }
+      return false; // permite el comportamiento predeterminado en pestañas normales
+    };
+    const subscriber = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscriber.remove();
+  }, [detalleId]);
 
   function verTab(key) {
     setVisitados((v) => (v[key] ? v : { ...v, [key]: true }));
@@ -190,8 +204,7 @@ function AppShell() {
             style={[styles.pane, tab !== t.key && styles.paneOculto]}
             pointerEvents={tab === t.key ? 'auto' : 'none'}
             accessibilityElementsHidden={tab !== t.key}
-            importantForAccessibility={tab === t.key ? 'auto' : 'no-hide-descendants'}
-          >
+            importantForAccessibility={tab === t.key ? 'auto' : 'no-hide-descendants'}>
             {renderPantalla(t.key)}
           </View>
         ))}
@@ -214,8 +227,7 @@ function AppShell() {
               style={[styles.tab, tab === t.key && styles.tabActive]}
               accessibilityRole="button"
               accessibilityLabel={`Ir a ${t.label}`}
-              accessibilityState={{ selected: tab === t.key }}
-            >
+              accessibilityState={{ selected: tab === t.key }}>
               <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
             </Pressable>
           ))}

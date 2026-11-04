@@ -2,31 +2,29 @@
 // Admin (agente): cola global ordenada + triaje/SLA + responder + gestion de casos.
 // Manejador del router: (PDO $db, array $claims, array $params, array $body, array $query).
 class AdminController {
-  /**
-   * Filtros de la cola, leidos del query string.
-   * estado: Abierto|EnGestion|Resuelto|activos (todo lo no resuelto)
-   * prioridad: Baja|Alta|Critica|sin_triar
-   * tipo: uno de Incidente::TIPOS
-   */
+  // Filtros de la cola, leidos del query string.
+  // estado: Abierto|EnGestion|Resuelto|activos (todo lo no resuelto)
+  // prioridad: Baja|Alta|Critica|sin_triar
+  // tipo: uno de Incidente::TIPOS
   private static function filtros(array $query): array {
     $estado = isset($query['estado']) ? trim((string)$query['estado']) : null;
     if ($estado === '') $estado = null;
     if ($estado !== null && $estado !== 'activos' && !in_array($estado, Incidente::ESTADOS, true)) {
-      Response::error('Estado inválido (Abierto|EnGestion|Resuelto|activos)', 400);
+      Response::error('Estado invalido (Abierto|EnGestion|Resuelto|activos)', 400);
     }
     $prioridad = isset($query['prioridad']) ? trim((string)$query['prioridad']) : null;
     if ($prioridad === '') $prioridad = null;
     if ($prioridad !== null && $prioridad !== 'sin_triar' && !in_array($prioridad, Incidente::PRIORIDADES, true)) {
-      Response::error('Prioridad inválida (Baja|Alta|Critica|sin_triar)', 400);
+      Response::error('Prioridad invalida (Baja|Alta|Critica|sin_triar)', 400);
     }
     $tipo = isset($query['tipo']) ? trim((string)$query['tipo']) : null;
     if ($tipo === '') $tipo = null;
     if ($tipo !== null && !in_array($tipo, Incidente::TIPOS, true)) {
-      Response::error('Tipo inválido', 400);
+      Response::error('Tipo invalido', 400);
     }
     $orden = strtolower((string)($query['orden'] ?? 'urgencia'));
     if (!in_array($orden, ['asc', 'desc', 'urgencia'], true)) {
-      Response::error('Orden inválido (asc|desc|urgencia)', 400);
+      Response::error('Orden invalido (asc|desc|urgencia)', 400);
     }
     $limit = min(max((int)($query['limit'] ?? 20), 1), 50);
     $page = max((int)($query['page'] ?? 1), 1);
@@ -64,7 +62,7 @@ class AdminController {
     $vista = isset($query['vista']) ? strtolower(trim((string)$query['vista'])) : null;
     if ($vista === '') $vista = null;
     if ($vista !== null && !in_array($vista, ['mios', 'siguiendo'], true)) {
-      Response::error('Vista inválida (mios|siguiendo)', 400);
+      Response::error('Vista invalida (mios|siguiendo)', 400);
     }
     $yo = (int)($claims['sub'] ?? 0);
 
@@ -89,7 +87,7 @@ class AdminController {
 
   public static function ver(PDO $db, array $claims, array $params, array $body, array $query): void {
     $id = (int)($params['id'] ?? 0);
-    if ($id <= 0) Response::error('Incidente inválido', 400);
+    if ($id <= 0) Response::error('Incidente invalido', 400);
     $m = new Incidente($db);
     $g = new GestionCaso($db);
     $inc = $m->findById($id);
@@ -121,13 +119,11 @@ class AdminController {
     ]], 200);
   }
 
-  /**
-   * Triaje y/o estado. Body: {prioridad?, estado?, motivo?}
-   * El motivo queda en el historial (se usa al reabrir un caso).
-   */
+  // Triaje y/o estado. Body: {prioridad?, estado?, motivo?}
+  // El motivo queda en el historial (se usa al reabrir un caso).
   public static function actualizar(PDO $db, array $claims, array $params, array $body): void {
     $id = (int)($params['id'] ?? 0);
-    if ($id <= 0) Response::error('Incidente inválido', 400);
+    if ($id <= 0) Response::error('Incidente invalido', 400);
     $m = new Incidente($db);
     $g = new GestionCaso($db);
     $actual = $m->findById($id);
@@ -138,11 +134,11 @@ class AdminController {
     $motivo = isset($body['motivo']) ? trim((string)$body['motivo']) : null;
     if ($motivo === '') $motivo = null;
     if ($motivo !== null && mb_strlen($motivo) > 300) {
-      Response::error('Motivo demasiado largo (máx. 300 caracteres)', 400);
+      Response::error('Motivo demasiado largo (max. 300 caracteres)', 400);
     }
     if ($prioridad === null && $estado === null) Response::error('Nada para actualizar (prioridad y/o estado)', 400);
-    if ($prioridad !== null && !in_array($prioridad, Incidente::PRIORIDADES, true)) Response::error('Prioridad inválida', 400);
-    if ($estado !== null && !in_array($estado, Incidente::ESTADOS, true)) Response::error('Estado inválido', 400);
+    if ($prioridad !== null && !in_array($prioridad, Incidente::PRIORIDADES, true)) Response::error('Prioridad invalida', 400);
+    if ($estado !== null && !in_array($estado, Incidente::ESTADOS, true)) Response::error('Estado invalido', 400);
     // Prioridad obligatoria antes de Resuelto (sin triar no se puede cerrar).
     $efectiva = $prioridad ?? ($actual['prioridad'] ?? null);
     if ($estado === 'Resuelto' && $efectiva === null) {
@@ -182,22 +178,30 @@ class AdminController {
 
   public static function responder(PDO $db, array $claims, array $params, array $body): void {
     $id = (int)($params['id'] ?? 0);
-    if ($id <= 0) Response::error('Incidente inválido', 400);
+    if ($id <= 0) Response::error('Incidente invalido', 400);
     $m = new Incidente($db);
     $g = new GestionCaso($db);
     if (!$m->findById($id)) Response::error('Incidente no encontrado', 404);
+    // Solo el agente dueño del caso o un admin pueden responder.
+    $inc = $m->findById($id);
+    $asignadoId = $inc['asignado_a'] ?? null;
+    $yo = (int)($claims['sub'] ?? 0);
+    $rol = $claims['rol'] ?? '';
+    if ($asignadoId !== null && (int)$asignadoId !== $yo && $rol !== 'admin') {
+      Response::error('Solo el agente que reclamó el caso puede responder. Solicitá autorización al dueño.', 403);
+    }
     $mensaje = trim((string)($body['mensaje'] ?? ''));
     $lm = mb_strlen($mensaje);
-    if ($lm < 2 || $lm > 2000) Response::error('Mensaje inválido (2 a 2000 caracteres)', 400);
+    if ($lm < 2 || $lm > 2000) Response::error('Mensaje invalido (2 a 2000 caracteres)', 400);
     $r = new Respuesta($db);
     try {
-      $rid = $r->responderAtomico($id, (int)$claims['sub'], $mensaje);
+      $rid = $r->responderAtomico($id, $yo, $mensaje);
     } catch (Throwable $e) {
       error_log('responder: ' . $e->getMessage());
       Response::error('Error interno del servidor', 500);
     }
     if ($rid === false) Response::error('Incidente no encontrado', 404);
-    $g->registrarEvento($id, (int)($claims['sub'] ?? 0) ?: null, 'responder', null);
+    $g->registrarEvento($id, $yo ?: null, 'responder', null);
     // Se devuelve el autor real para que la app muestre el hilo sin recargar.
     $st = $db->prepare('SELECT u.nombre AS autor, u.rol AS autor_rol FROM respuestas r JOIN usuarios u ON u.id = r.autor_id WHERE r.id = ? LIMIT 1');
     $st->execute([$rid]);
@@ -215,6 +219,8 @@ class AdminController {
   public static function resumen(PDO $db, array $claims, array $params, array $body, array $query): void {
     $rows = $db->query('SELECT * FROM resumen_cola()')->fetchAll();
     $sinTriar = (int)$db->query('SELECT COUNT(*) FROM incidentes WHERE prioridad IS NULL')->fetchColumn();
+    $sinReclamar = (int)$db->query('SELECT COUNT(*) FROM incidentes WHERE asignado_a IS NULL AND estado = \'Abierto\'')->fetchColumn();
+    $enGestion = (int)$db->query("SELECT COUNT(*) FROM incidentes WHERE estado = 'EnGestion'")->fetchColumn();
     $vencidos = 0;
     $mios = 0;
     try {
@@ -228,12 +234,12 @@ class AdminController {
       $st->execute([$yo]);
       $mios = (int)$st->fetchColumn();
     } catch (Throwable $e) { $mios = 0; }
-    Response::json(['data' => $rows, 'sin_triar' => $sinTriar, 'vencidos' => $vencidos, 'mios' => $mios], 200);
+    Response::json(['data' => $rows, 'sin_triar' => $sinTriar, 'sin_reclamar' => $sinReclamar, 'en_gestion' => $enGestion, 'vencidos' => $vencidos, 'mios' => $mios], 200);
   }
 
   public static function respuestas(PDO $db, array $claims, array $params): void {
     $id = (int)($params['id'] ?? 0);
-    if ($id <= 0) Response::error('Incidente inválido', 400);
+    if ($id <= 0) Response::error('Incidente invalido', 400);
     $m = new Incidente($db);
     if (!$m->findById($id)) Response::error('Incidente no encontrado', 404);
     $r = new Respuesta($db);
@@ -244,11 +250,11 @@ class AdminController {
   // Usa SELECT ... FOR UPDATE: dos agentes no pueden reclamar el mismo caso.
   public static function claim(PDO $db, array $claims, array $params): void {
     $id = (int)($params['id'] ?? 0);
-    if ($id <= 0) Response::error('Incidente inválido', 400);
+    if ($id <= 0) Response::error('Incidente invalido', 400);
     $m = new Incidente($db);
     $g = new GestionCaso($db);
     $yo = (int)($claims['sub'] ?? 0);
-    if ($yo <= 0) Response::error('Usuario inválido', 401);
+    if ($yo <= 0) Response::error('Usuario invalido', 401);
 
     try {
       $db->beginTransaction();
@@ -290,7 +296,7 @@ class AdminController {
   // Libera el caso: asignado_a = NULL.
   public static function release(PDO $db, array $claims, array $params): void {
     $id = (int)($params['id'] ?? 0);
-    if ($id <= 0) Response::error('Incidente inválido', 400);
+    if ($id <= 0) Response::error('Incidente invalido', 400);
     $m = new Incidente($db);
     $g = new GestionCaso($db);
     if (!$m->findById($id)) Response::error('Incidente no encontrado', 404);
@@ -311,12 +317,12 @@ class AdminController {
   // Deriva a otro agente (rol agente) con motivo opcional.
   public static function derivar(PDO $db, array $claims, array $params, array $body): void {
     $id = (int)($params['id'] ?? 0);
-    if ($id <= 0) Response::error('Incidente inválido', 400);
+    if ($id <= 0) Response::error('Incidente invalido', 400);
     $m = new Incidente($db);
     $g = new GestionCaso($db);
     $destino = $body['agente_id'] ?? null;
     $destino = filter_var($destino, FILTER_VALIDATE_INT);
-    if ($destino === false || $destino <= 0) Response::error('agente_id inválido', 400);
+    if ($destino === false || $destino <= 0) Response::error('agente_id invalido', 400);
     $st = $db->prepare('SELECT id, rol FROM usuarios WHERE id = ? LIMIT 1');
     $st->execute([$destino]);
     $u = $st->fetch();
@@ -326,7 +332,7 @@ class AdminController {
     $motivo = isset($body['motivo']) ? trim((string)$body['motivo']) : null;
     if ($motivo === '') $motivo = null;
     if ($motivo !== null && mb_strlen($motivo) > 300) {
-      Response::error('Motivo demasiado largo (máx. 300 caracteres)', 400);
+      Response::error('Motivo demasiado largo (max. 300 caracteres)', 400);
     }
 
     try {
@@ -359,7 +365,7 @@ class AdminController {
   // Seguir el caso (idempotente). Cualquier agente puede seguir un caso, tenga o no el caso.
   public static function seguir(PDO $db, array $claims, array $params): void {
     $id = (int)($params['id'] ?? 0);
-    if ($id <= 0) Response::error('Incidente inválido', 400);
+    if ($id <= 0) Response::error('Incidente invalido', 400);
     $m = new Incidente($db);
     $g = new GestionCaso($db);
     if (!$m->findById($id)) Response::error('Incidente no encontrado', 404);
@@ -378,7 +384,7 @@ class AdminController {
   // Dejar de seguir (idempotente).
   public static function dejarSeguir(PDO $db, array $claims, array $params): void {
     $id = (int)($params['id'] ?? 0);
-    if ($id <= 0) Response::error('Incidente inválido', 400);
+    if ($id <= 0) Response::error('Incidente invalido', 400);
     $m = new Incidente($db);
     $g = new GestionCaso($db);
     if (!$m->findById($id)) Response::error('Incidente no encontrado', 404);
@@ -394,10 +400,10 @@ class AdminController {
     ]], 200);
   }
 
-  // Historial interno con actor_nombre (para agente).
+  // Historial interno con actor_nombre (para el agente).
   public static function historial(PDO $db, array $claims, array $params): void {
     $id = (int)($params['id'] ?? 0);
-    if ($id <= 0) Response::error('Incidente inválido', 400);
+    if ($id <= 0) Response::error('Incidente invalido', 400);
     $m = new Incidente($db);
     $g = new GestionCaso($db);
     if (!$m->findById($id)) Response::error('Incidente no encontrado', 404);

@@ -1,27 +1,8 @@
 <?php
 // Front-controller: tabla de rutas (backend/src/Utils/Router.php).
 // Roles: viajero | agente | admin. El admin administra usuarios y agentes.
-require_once __DIR__ . '/../src/Config.php';
-require_once __DIR__ . '/../src/Database.php';
-require_once __DIR__ . '/../src/Utils/JwtHS256.php';
-require_once __DIR__ . '/../src/Utils/Response.php';
-require_once __DIR__ . '/../src/Utils/Cors.php';
-require_once __DIR__ . '/../src/Utils/Security.php';
-require_once __DIR__ . '/../src/Utils/RateLimit.php';
-require_once __DIR__ . '/../src/Utils/Router.php';
-require_once __DIR__ . '/../src/Middleware/Auth.php';
-require_once __DIR__ . '/../src/Models/Usuario.php';
-require_once __DIR__ . '/../src/Models/Auditoria.php';
-require_once __DIR__ . '/../src/Models/Reserva.php';
-require_once __DIR__ . '/../src/Models/Incidente.php';
-require_once __DIR__ . '/../src/Models/GestionCaso.php';
-require_once __DIR__ . '/../src/Models/Respuesta.php';
-require_once __DIR__ . '/../src/Models/RefreshToken.php';
-require_once __DIR__ . '/../src/Controllers/AuthController.php';
-require_once __DIR__ . '/../src/Controllers/ItinerarioController.php';
-require_once __DIR__ . '/../src/Controllers/IncidentesController.php';
-require_once __DIR__ . '/../src/Controllers/AdminController.php';
-require_once __DIR__ . '/../src/Controllers/AdminUsuariosController.php';
+// Autoload: backend/src/bootstrap.php resuelve las clases por nombre de archivo.
+require_once __DIR__ . '/../src/bootstrap.php';
 
 Config::load(__DIR__ . '/../.env');
 
@@ -111,6 +92,10 @@ $router->get('/api/incidentes/{id}/respuestas', ['viajero', 'agente', 'admin'], 
     return;
   }
   AdminController::respuestas($db, $claims, $params);
+});
+$router->post('/api/incidentes/{id}/respuestas', ['viajero'], function (PDO $db, array $claims, array $params, array $body) {
+  $id = (int)$params['id'];
+  IncidentesController::responderViajero($db, $claims, $params, $body);
 });
 
 // --- Panel de agentes (RF-07/08/09, control RF-10: viajero recibe 403) ---

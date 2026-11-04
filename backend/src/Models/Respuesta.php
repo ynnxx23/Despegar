@@ -17,7 +17,7 @@ class Respuesta {
     }, $st->fetchAll());
   }
 
-  // Inserta respuesta + marca EnGestion en UNA transacción vía función crear_respuesta().
+  // Inserta respuesta + marca EnGestion en UNA transaccion vía función crear_respuesta().
   // Mapea P0002 (carrera: incidente borrado entre check e insert) a false para 404.
   public function responderAtomico(int $incidenteId, int $autorId, string $mensaje): int|false {
     try {

@@ -82,16 +82,16 @@ class GestionCaso {
       $nombre = $e['actor_nombre'] ?? 'El equipo';
       switch ($e['accion']) {
         case 'claim':
-          $out[] = ['texto' => $nombre . ' tomó tu caso', 'creado_at' => $e['creado_at']];
+          $out[] = ['texto' => $nombre . ' tomo tu caso', 'creado_at' => $e['creado_at']];
           break;
         case 'responder':
-          $out[] = ['texto' => 'El equipo respondió', 'creado_at' => $e['creado_at']];
+          $out[] = ['texto' => 'El equipo respondio', 'creado_at' => $e['creado_at']];
           break;
         case 'estado':
-          $out[] = ['texto' => 'Tu caso pasó a ' . ($e['detalle'] ?: 'EnGestion'), 'creado_at' => $e['creado_at']];
+          $out[] = ['texto' => 'Tu caso paso a ' . ($e['detalle'] ?: 'EnGestion'), 'creado_at' => $e['creado_at']];
           break;
         case 'resuelto':
-          $out[] = ['texto' => $nombre . ' marcó tu caso como resuelto', 'creado_at' => $e['creado_at']];
+          $out[] = ['texto' => $nombre . ' marco tu caso como resuelto', 'creado_at' => $e['creado_at']];
           break;
         case 'reabierto':
           $out[] = ['texto' => 'Tu caso fue reabierto', 'creado_at' => $e['creado_at']];

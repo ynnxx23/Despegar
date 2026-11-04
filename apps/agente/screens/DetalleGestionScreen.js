@@ -334,6 +334,8 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
   const nombreAsignado = asignado?.nombre ?? inc?.asignado_nombre ?? null;
   const sinAsignar = asignadoId == null && !nombreAsignado;
   const esMio = asignadoId != null && yo?.id != null && String(asignadoId) === String(yo.id);
+  const esAdmin = yo?.rol === 'admin';
+  const puedeResponder = esMio || esAdmin; // solo dueño o admin pueden responder
   const nombresSeguidores = caso.seguidores.map((s) => s?.nombre ?? `#${s?.id ?? '—'}`).filter(Boolean);
   const sugerida = inc?.prioridad_sugerida ?? null;
   const motivoSugerida = inc?.prioridad_motivo ?? null;
@@ -431,8 +433,9 @@ export function DetalleGestionScreen({ id, onBack, onChange }) {
             mensaje={mensaje}
             onMensaje={setMensaje}
             savingReply={savingReply}
-            onResponder={responder}
+            onResponder={puedeResponder ? responder : undefined}
             nombreViajero={viajero?.nombre ?? null}
+            puedeResponder={puedeResponder}
           />
         )}
 

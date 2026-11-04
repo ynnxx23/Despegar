@@ -1,5 +1,5 @@
 <?php
-// Reserva: solo lectura para el viajero dueño (itinerario). Sin CRUD en v1 (decisión plan §22).
+// Reserva: solo lectura para el viajero dueño (itinerario).
 class Reserva {
   private PDO $db;
   public function __construct(PDO $db) { $this->db = $db; }

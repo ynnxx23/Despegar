@@ -10,7 +10,7 @@ import { api } from '../../shared/api';
 import { Badge, Chip, EmptyState, ErrorBanner } from '../../shared/components';
 import { etiquetaEstado, etiquetaPrioridad, etiquetaTipo } from '../../shared/format';
 
-const TABS = ['Activos', 'Sin triar', 'Míos', 'Siguiendo', 'Resueltos'];
+const TABS = ['Activos', 'Sin triar', 'Sin reclamar', 'Míos', 'Siguiendo', 'Resueltos'];
 const SORTS = [
   { id: 'urgencia', label: 'Urgentes' },
   { id: 'asc', label: 'Antiguos' },
@@ -142,7 +142,7 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
   const [page, setPage] = useState(1);
   const [items, setItems] = useState(null);
   const [total, setTotal] = useState(0);
-  const [conteos, setConteos] = useState({ sinTriar: null, vencidos: null, mios: null });
+  const [conteos, setConteos] = useState({ sinTriar: null, sinReclamar: null, enGestion: null, mios: null });
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [cargando, setCargando] = useState(true);
@@ -160,9 +160,10 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
     p.set('limit', String(LIMITE));
     if (tab === 'Activos') p.set('estado', 'activos');
     if (tab === 'Sin triar') { p.set('estado', 'activos'); p.set('prioridad', 'sin_triar'); }
+    if (tab === 'Sin reclamar') { p.set('estado', 'activos'); p.set('sin_reclamar', '1'); }
     if (tab === 'Resueltos') p.set('estado', 'Resuelto');
     if (tab === 'Míos' || tab === 'Siguiendo') p.set('vista', tab === 'Míos' ? 'mios' : 'siguiendo');
-    if (prioFiltro !== 'Todas' && tab !== 'Sin triar') p.set('prioridad', prioFiltro);
+    if (prioFiltro !== 'Todas' && tab !== 'Sin triar' && tab !== 'Sin reclamar') p.set('prioridad', prioFiltro);
     if (tipoFiltro !== 'Todos') p.set('tipo', tipoFiltro);
     return p.toString();
   }, [tab, orden, page, prioFiltro, tipoFiltro]);
@@ -192,11 +193,12 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
       const r = await api.get('/admin/incidentes/resumen');
       setConteos({
         sinTriar: r?.sin_triar ?? null,
-        vencidos: r?.vencidos ?? null,
+        sinReclamar: r?.sin_reclamar ?? null,
+        enGestion: r?.en_gestion ?? null,
         mios: r?.mios ?? null,
       });
     } catch (e) {
-      setConteos({ sinTriar: null, vencidos: null, mios: null });
+      setConteos({ sinTriar: null, sinReclamar: null, enGestion: null, mios: null });
     }
   }, []);
 
@@ -212,6 +214,8 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
   function irAResumen(cual) {
     if (cual === 'mios') cambiarTab('Míos');
     else if (cual === 'sinTriar') cambiarTab('Sin triar');
+    else if (cual === 'sinReclamar') cambiarTab('Sin reclamar');
+    else if (cual === 'enGestion') cambiarTab('Activos');
     else cambiarTab('Activos');
   }
 
@@ -273,7 +277,8 @@ export function ColaScreen({ onOpen, refreshKey, user }) {
       <View style={styles.chipsResumen}>
         {[
           { id: 'sinTriar', label: 'Sin triar', n: conteos?.sinTriar },
-          { id: 'vencidos', label: 'Vencidos', n: conteos?.vencidos },
+          { id: 'sinReclamar', label: 'Sin reclamar', n: conteos?.sinReclamar },
+          { id: 'enGestion', label: 'En gestión', n: conteos?.enGestion },
           { id: 'mios', label: 'Míos', n: conteos?.mios },
         ].map((c) => (
           <Pressable

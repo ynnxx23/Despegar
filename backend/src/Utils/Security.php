@@ -1,12 +1,11 @@
 <?php
-// Cabeceras de seguridad de la API. Se aplican a todas las respuestas.
+// Cabeceras de seguridad de la API.
 class Security {
   public static function applyHeaders(): void {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: no-referrer');
     header('Cross-Origin-Resource-Policy: same-site');
-    // La API solo devuelve JSON: no tiene por que cargar recursos externos.
     header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'");
     if (self::esHttps()) {
       header('Strict-Transport-Security: max-age=31536000; includeSubDomains');

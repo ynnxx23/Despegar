@@ -1,7 +1,18 @@
 // Detalle del incidente del viajero: estado, novedades y respuestas de soporte.
 // El hilo de respuestas va en FlatList (no se renderiza todo de una vez).
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { theme } from '../../shared/theme';
 import { api } from '../../shared/api';
 import { AppButton, Badge, ErrorBanner } from '../../shared/components';
@@ -18,6 +29,8 @@ export function DetalleIncidenteScreen({ id, onBack }) {
   const [hilo, setHilo] = useState([]);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [respuestaMensaje, setRespuestaMensaje] = useState('');
+  const [enviandoRespuesta, setEnviandoRespuesta] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
@@ -39,6 +52,36 @@ export function DetalleIncidenteScreen({ id, onBack }) {
     setRefreshing(true);
     await load();
     setRefreshing(false);
+  }
+
+  async function enviarRespuesta() {
+    const texto = respuestaMensaje.trim();
+    if (!texto) return;
+    setEnviandoRespuesta(true);
+    try {
+      const r = await api.post(`/incidentes/${id}/respuestas`, { mensaje: texto });
+      const nuevo = r?.data ?? null;
+      setRespuestaMensaje('');
+      if (nuevo?.id != null) {
+        setHilo((prev) => [
+          ...prev,
+          {
+            id: nuevo.id,
+            mensaje: nuevo.mensaje ?? texto,
+            incidente_id: nuevo.incidente_id ?? id,
+            creado_at: nuevo.creado_at ?? new Date().toISOString(),
+            autor: nuevo.autor ?? 'Viajero',
+            autor_rol: nuevo.autor_rol ?? 'viajero',
+          },
+        ]);
+      } else {
+        await load();
+      }
+    } catch (e) {
+      setError(e?.message ?? 'No se pudo enviar la respuesta.');
+    } finally {
+      setEnviandoRespuesta(false);
+    }
   }
 
   // Índice real del estado: -1 si el backend devuelve un estado desconocido.
@@ -135,6 +178,29 @@ export function DetalleIncidenteScreen({ id, onBack }) {
         )}
 
         {inc && <Text style={styles.subtitle} accessibilityRole="header">Respuestas de soporte ({hilo.length})</Text>}
+
+        {inc && (
+          <View style={styles.responderBox}>
+            <TextInput
+              style={styles.responderInput}
+              value={respuestaMensaje}
+              onChangeText={setRespuestaMensaje}
+              placeholder="Escribí tu respuesta…"
+              multiline
+              numberOfLines={2}
+              maxLength={2000}
+              accessibilityLabel="Escribí tu respuesta al agente"
+            />
+            <TouchableOpacity
+              style={styles.responderBtn}
+              onPress={enviarRespuesta}
+              disabled={enviandoRespuesta}
+              accessibilityLabel="Enviar respuesta"
+            >
+              <Text style={styles.responderBtnTexto}>{enviandoRespuesta ? 'Enviando…' : 'Enviar'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   }
@@ -164,21 +230,24 @@ export function DetalleIncidenteScreen({ id, onBack }) {
   }
 
   return (
-    <FlatList
-      style={styles.root}
-      contentContainerStyle={styles.content}
-      data={hilo}
-      keyExtractor={(m, idx) => String(m?.id ?? idx)}
-      renderItem={respuesta}
-      ListHeaderComponent={header()}
-      ListEmptyComponent={sinRespuestas()}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.colors.primary]} />}
-    />
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.avoid}>
+      <FlatList
+        style={styles.root}
+        contentContainerStyle={styles.content}
+        data={hilo}
+        keyExtractor={(m, idx) => String(m?.id ?? idx)}
+        renderItem={respuesta}
+        ListHeaderComponent={header()}
+        ListEmptyComponent={sinRespuestas()}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.colors.primary]} />}
+      />
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
+  avoid: { flex: 1, backgroundColor: theme.colors.background },
   content: { padding: theme.spacing.lg, gap: theme.spacing.md },
   headerCol: { gap: theme.spacing.md },
   subtitle: { fontSize: theme.type.subtitle, fontWeight: 'bold', color: theme.colors.text },
@@ -206,4 +275,8 @@ const styles = StyleSheet.create({
   novedad: { flexDirection: 'row', gap: theme.spacing.sm, alignItems: 'flex-start' },
   novedadPunto: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.primary, marginTop: 5 },
   novedadCol: { flex: 1, gap: 2 },
+  responderBox: { flexDirection: 'row', gap: theme.spacing.sm, padding: theme.spacing.sm, backgroundColor: theme.colors.card, borderTopWidth: 1, borderTopColor: theme.colors.border },
+  responderInput: { flex: 1, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.sm, paddingVertical: theme.spacing.xs, fontSize: theme.type.body, color: theme.colors.text },
+  responderBtn: { backgroundColor: theme.colors.primary, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.xs, borderRadius: theme.radius.md, justifyContent: 'center', alignItems: 'center', minHeight: 36 },
+  responderBtnTexto: { color: '#fff', fontWeight: 'bold', fontSize: theme.type.caption },
 });

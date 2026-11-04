@@ -214,7 +214,7 @@ function PanelTriaje({ inc, sugerida, motivoSugerida, savingPut, onPrioridad, on
   );
 }
 
-function PanelRespuesta({ hilo, mensaje, onMensaje, savingReply, onResponder, nombreViajero }) {
+function PanelRespuesta({ hilo, mensaje, onMensaje, savingReply, onResponder, nombreViajero, puedeResponder = true }) {
   const esDeAgente = (m) => {
     if (m?.autor_rol) return m.autor_rol === 'agente';
     if (nombreViajero) return m?.autor !== nombreViajero;
@@ -227,8 +227,9 @@ function PanelRespuesta({ hilo, mensaje, onMensaje, savingReply, onResponder, no
       <TextInput
         style={styles.area}
         value={mensaje}
-        onChangeText={(t) => onMensaje(t.slice(0, MAX_RESPUESTA))}
-        placeholder="Ej. Hablamos con la aerolínea: reprogramado mañana 08:00."
+        onChangeText={puedeResponder ? (t) => onMensaje(t.slice(0, MAX_RESPUESTA)) : undefined}
+        editable={puedeResponder}
+        placeholder={puedeResponder ? 'Ej. Hablamos con la aerolínea: reprogramado mañana 08:00.' : 'Solo el dueño del caso puede responder'}
         placeholderTextColor={theme.colors.muted}
         multiline
         numberOfLines={3}
@@ -237,7 +238,7 @@ function PanelRespuesta({ hilo, mensaje, onMensaje, savingReply, onResponder, no
         accessibilityLabel="Mensaje para el viajero"
       />
       <Text style={styles.muted}>{mensaje.length}/{MAX_RESPUESTA}</Text>
-      <AppButton title="Enviar respuesta" onPress={onResponder} loading={savingReply} />
+      <AppButton title="Enviar respuesta" onPress={puedeResponder ? onResponder : undefined} loading={savingReply} disabled={!puedeResponder} />
 
       <Text style={styles.subtitle}>Hilo ({hilo.length})</Text>
       {hilo.map((m) => {

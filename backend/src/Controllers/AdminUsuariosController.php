@@ -17,7 +17,7 @@ class AdminUsuariosController {
     $rol = isset($query['rol']) ? trim((string)$query['rol']) : null;
     if ($rol === '') $rol = null;
     if ($rol !== null && !in_array($rol, Usuario::ROLES, true)) {
-      Response::error('Rol inválido (viajero|agente|admin)', 400);
+      Response::error('Rol invalido (viajero|agente|admin)', 400);
     }
     $q = isset($query['q']) ? trim((string)$query['q']) : null;
     if ($q === '') $q = null;
@@ -43,16 +43,16 @@ class AdminUsuariosController {
     $rol = trim((string)($body['rol'] ?? 'agente'));
 
     if (mb_strlen($nombre) < 2 || mb_strlen($nombre) > 100) {
-      Response::error('Nombre inválido (2 a 100 caracteres)', 400);
+      Response::error('Nombre invalido (2 a 100 caracteres)', 400);
     }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 160) {
-      Response::error('Email inválido', 400);
+      Response::error('Email invalido', 400);
     }
     if (strlen($password) < 8 || strlen($password) > 72) {
-      Response::error('Password inválida (8 a 72 caracteres)', 400);
+      Response::error('Password invalida (8 a 72 caracteres)', 400);
     }
     if (!in_array($rol, Usuario::ROLES, true)) {
-      Response::error('Rol inválido (viajero|agente|admin)', 400);
+      Response::error('Rol invalido (viajero|agente|admin)', 400);
     }
 
     $u = new Usuario($db);
@@ -85,7 +85,7 @@ class AdminUsuariosController {
   // PUT /api/admin/usuarios/{id} {rol?, activo?, password?, motivo?}
   public static function actualizar(PDO $db, array $claims, array $params, array $body): void {
     $id = (int)($params['id'] ?? 0);
-    if ($id <= 0) Response::error('Usuario inválido', 400);
+    if ($id <= 0) Response::error('Usuario invalido', 400);
     [$u, $row] = self::obtener($db, $id);
 
     $actor = (int)($claims['sub'] ?? 0);
@@ -96,25 +96,25 @@ class AdminUsuariosController {
     $motivo = isset($body['motivo']) ? trim((string)$body['motivo']) : null;
     if ($motivo === '') $motivo = null;
     if ($motivo !== null && mb_strlen($motivo) > 300) {
-      Response::error('Motivo demasiado largo (máx. 300 caracteres)', 400);
+      Response::error('Motivo demasiado largo (max. 300 caracteres)', 400);
     }
 
     if (array_key_exists('rol', $body)) {
       $nuevoRol = trim((string)$body['rol']);
       if (!in_array($nuevoRol, Usuario::ROLES, true)) {
-        Response::error('Rol inválido (viajero|agente|admin)', 400);
+        Response::error('Rol invalido (viajero|agente|admin)', 400);
       }
       if ($nuevoRol === $rolActual) $nuevoRol = null;
     }
     if (array_key_exists('activo', $body)) {
       $nuevoActivo = filter_var($body['activo'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-      if ($nuevoActivo === null) Response::error('Valor de "activo" inválido', 400);
+      if ($nuevoActivo === null) Response::error('Valor de "activo" invalido', 400);
       if ($nuevoActivo === (bool)$row['activo']) $nuevoActivo = null;
     }
     if (array_key_exists('password', $body)) {
       $pass = (string)$body['password'];
       if (strlen($pass) < 8 || strlen($pass) > 72) {
-        Response::error('Password inválida (8 a 72 caracteres)', 400);
+        Response::error('Password invalida (8 a 72 caracteres)', 400);
       }
       $nuevaPass = $pass;
     }
@@ -171,7 +171,7 @@ class AdminUsuariosController {
   // GET /api/admin/usuarios/{id}/historial
   public static function historial(PDO $db, array $claims, array $params, array $body, array $query): void {
     $id = (int)($params['id'] ?? 0);
-    if ($id <= 0) Response::error('Usuario inválido', 400);
+    if ($id <= 0) Response::error('Usuario invalido', 400);
     [$u, $row] = self::obtener($db, $id);
     $limite = min(max((int)($query['limit'] ?? 50), 1), 200);
     Response::json([

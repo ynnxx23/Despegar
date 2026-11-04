@@ -1,8 +1,5 @@
 <?php
-// CORS configurable desde el entorno.
-//   CORS_ORIGIN vacio  -> sin cabeceras CORS (solo apps nativas y mismo origen).
-//   CORS_ORIGIN "*"   -> cualquier origen (solo desarrollo).
-//   CORS_ORIGIN "https://a.com,https://b.com" -> allowlist.
+// CORS configurable desde el entorno (CORS_ORIGIN).
 class Cors {
   public static function apply(): void {
     $configurado = trim(Config::get('CORS_ORIGIN', ''));
@@ -10,7 +7,7 @@ class Cors {
 
     if ($configurado === '*') {
       if (strtolower(Config::get('APP_ENV', 'development')) === 'production') {
-        error_log('CORS_ORIGIN="*" con APP_ENV=production: revisa la configuracion.');
+        error_log('CORS_ORIGIN="*" con APP_ENV=production: revisar configuracion.');
       }
       header('Access-Control-Allow-Origin: *');
     } elseif ($configurado !== '' && $origin !== '' && self::permitido($origin, $configurado)) {
