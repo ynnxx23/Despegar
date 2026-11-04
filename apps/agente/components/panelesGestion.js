@@ -3,7 +3,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { theme } from '../../shared/theme';
 import { Badge, AppButton } from '../../shared/components';
 import { TIPO_INCIDENTE, TIPO_RESERVA, accionLegible, etiquetaEstado, etiquetaPrioridad, fmtFecha } from '../../shared/format';
-import { styles } from '../components/estilosGestion';
+import { styles } from './estilosGestion';
 
 const MAX_RESPUESTA = 2000;
 const MAX_MOTIVO = 500;
