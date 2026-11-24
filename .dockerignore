@@ -6,11 +6,9 @@ apps/
 node_modules/
 docs/
 tests/
-deploy/
 *.docx
 *.md
 !README.md
-db/
 backend/.env
 backend/.env.example
 start-*.cmd
