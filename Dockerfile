@@ -4,12 +4,15 @@ FROM php:8.5.12-cli
 
 # pdo_pgsql necesita libpq-dev para linkear; se limpia el cache de apt.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libpq-dev \
+ && apt-get install -y --no-install-recommends libpq-dev postgresql-client \
  && docker-php-ext-install pdo_pgsql \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY backend/ /app/
+# Schema, seeds y migraciones + script de pre-deploy (deploy/init-db.sh).
+COPY db/ /app/db/
+COPY deploy/init-db.sh /app/deploy/init-db.sh
 
 # Railway inyecta PORT; el server embebido de PHP debe escuchar en esa variable.
 ENV PORT=8000
